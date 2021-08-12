@@ -3,10 +3,11 @@ module Codec.MIME.TextEncoding (utf8, rfc5987, rfc2822) where
 import Control.Monad (liftM3)
 import Data.Bits (Bits (shiftR, (.&.)))
 import Data.ByteString (unpack)
-import Data.Char (isAlpha, isControl, isDigit)
+import Data.Char (isAlpha, isAscii, isControl, isDigit)
 import Data.Text qualified as T
 import Numeric (showHex)
 
+-- | Linked list of UTF-8 bytes
 utf8 :: Char -> NonEmpty Word8
 utf8 (ord -> n) =
     fromIntegral
@@ -25,13 +26,17 @@ rfc5987 :: Text -> Text
 rfc5987 = T.concatMap (liftM3 bool escape one attrchar) . T.filter (not . isControl)
   where
     attrchar :: Char -> Bool
-    attrchar = isAlpha ||^ isDigit ||^ (`elem` ("!#$&+-.^_`|~" :: String))
+    attrchar = isAlpha ||^ isAsciiDigit ||^ (`elem` ("!#$&+-.^_`|~" :: String))
+
+    isAsciiDigit :: Char -> Bool
+    isAsciiDigit = isAscii &&^ isDigit
 
     escape :: Char -> Text
     escape = foldMap (T.toUpper . toText . ('%' :) . (`showHex` "")) . utf8
 
+-- | Header name format
 rfc2822 :: Text -> ByteString
-rfc2822 t = T.foldl' (\acc c -> acc <> enc c) mempty t
+rfc2822 = T.foldl' (\acc c -> acc <> enc c) mempty
   where
     enc :: Char -> ByteString
     enc (fromIntegral . ord -> c)

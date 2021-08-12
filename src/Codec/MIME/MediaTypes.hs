@@ -9,16 +9,21 @@ module Codec.MIME.MediaTypes (
     pattern MultipartRelated,
 ) where
 
+-- | The value of the "Content-Type" header along with associated parameters.
 data MIMEType = MIMEType
     { mediaType :: MediaType
     , mimeParams :: [(Text, Text)]
     }
     deriving (Eq)
 
+-- | Get the proper 'Text' value for a 'MIMEType'.
 mimetype :: MIMEType -> Text
 mimetype MIMEType{..} =
     mediatype mediaType <> foldMap (\(name, val) -> fold ["; ", name, "=\"", val, "\""]) mimeParams
 
+-- | The media type for the content beneath the header.
+-- See [the IANA website](https://www.iana.org/assignments/media-types/media-types.xhtml)
+-- to decide which content type is right for your data.
 data MediaType
     = Application Text
     | Audio Text
@@ -32,6 +37,7 @@ data MediaType
     | MediaOther Text Text
     deriving (Eq, Show)
 
+-- | Get the proper 'Text' value for a 'MediaType'.
 mediatype :: MediaType -> Text
 mediatype = \case
     Application t -> "application/" <> t
@@ -45,6 +51,9 @@ mediatype = \case
     Video t -> "video/" <> t
     MediaOther o t -> o <> "/" <> t
 
+-- | Typical values of multipart media types.
+-- See [the IANA website](https://www.iana.org/assignments/media-types/media-types.xhtml#multipart)
+-- for a complete list.
 data Multipart
     = Alternative
     | Byteranges
@@ -59,6 +68,7 @@ data Multipart
     | MultipartOther Text
     deriving (Eq, Show)
 
+-- | Get the proper 'Text' value for a 'Multipart' value.
 multipart :: Multipart -> Text
 multipart = \case
     Alternative -> "alternative"

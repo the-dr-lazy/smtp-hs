@@ -215,4 +215,4 @@ instance ToSinglePart PDF where
     partMIMEType _ = MIMEType (Application "pdf") [("charset", "utf-8")]
     partDisposition _ = Just $ Disposition Attachment []
     partEncoding _ = Just Base64
-    partContent = BSL.fromStrict . pdfBytes
+    partContent = fromStrict . pdfBytes

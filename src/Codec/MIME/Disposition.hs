@@ -8,30 +8,35 @@ module Codec.MIME.Disposition (
 ) where
 
 import Codec.MIME.TextEncoding (rfc5987)
-import Data.Text qualified as T
-import Data.Time.Compat (LocalTime (..), TimeOfDay (..), pattern YearMonthDay)
+import Data.Time.Compat (LocalTime)
+import Data.Time.Format.ISO8601.Compat (iso8601Show)
 
+-- | The value of the "Content-Disposition" header along with associated parameters.
 data Disposition = Disposition
     { dispType :: DispType
     , dispParams :: [DispParam]
     }
     deriving (Eq)
 
+-- | Get the proper 'Text' value for a 'Disposition'.
 disposition :: Disposition -> Text
 disposition Disposition{..} = disptype dispType <> foldMap (("; " <>) . dispparam) dispParams
 
+-- | The disposition type for the content beneath the header. Typically "inline" or "attachment".
 data DispType
     = Inline
     | Attachment
     | DispOther Text
     deriving (Eq, Ord, Show)
 
+-- | Get the proper 'Text' value for a 'DispType'.
 disptype :: DispType -> Text
 disptype = \case
     Inline -> "inline"
     Attachment -> "attachment"
     DispOther t -> t
 
+-- | Parameters to the content disposition of a section. One should prefer @FilenameStar@ over @Filename@.
 data DispParam
     = Name Text
     | FilenameStar Text
@@ -43,34 +48,14 @@ data DispParam
     | Other Text Text
     deriving (Eq, Show)
 
+-- | Get the proper 'Text' value from a 'DispParam'.
 dispparam :: DispParam -> Text
 dispparam = \case
     Name t -> "name=\"" <> t <> "\""
     FilenameStar t -> "filename*=utf-8''" <> rfc5987 t
     Filename t -> "filename=\"" <> t <> "\""
-    Created t -> "creation-date=\"" <> dmy24 t <> "\""
-    Modified t -> "modification-date=\"" <> dmy24 t <> "\""
-    Read t -> "read-date=\"" <> dmy24 t <> "\""
+    Created t -> "creation-date=\"" <> toText (iso8601Show t) <> "\""
+    Modified t -> "modification-date=\"" <> toText (iso8601Show t) <> "\""
+    Read t -> "read-date=\"" <> toText (iso8601Show t) <> "\""
     Size t -> "size=" <> show t
     Other t t' -> t <> "=" <> t'
-
-dmy24 :: LocalTime -> Text
-dmy24 (LocalTime (YearMonthDay y m d) (TimeOfDay h mm s)) =
-    T.unwords [tshow 0 d, month m, T.drop 2 $ tshow 4 y, T.intercalate ":" $ map (tshow 2) [h, mm, round s]]
-  where
-    tshow :: (Show a) => Int -> a -> Text
-    tshow n = (\str -> T.replicate (n - T.length str) "0" <> str) . show
-    month :: Int -> Text
-    month = \case
-        1 -> "Jan"
-        2 -> "Feb"
-        3 -> "Mar"
-        4 -> "Apr"
-        5 -> "May"
-        6 -> "Jun"
-        7 -> "Jul"
-        8 -> "Aug"
-        9 -> "Sep"
-        10 -> "Oct"
-        11 -> "Nov"
-        _ -> "Dec"
