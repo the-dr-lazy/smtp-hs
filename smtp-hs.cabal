@@ -1,0 +1,99 @@
+cabal-version: 2.4
+
+name: smtp-hs
+version: 0.0.1.0
+synopsis: A self-contained library for working with MIME and sending email via SMTP.
+homepage: https://github.com/bi-functor/smtp-hs
+bug-reports: https://github.com/bi-functor/smtp-hs/issues
+license: BSD-3-Clause
+license-file: LICENSE
+author: Melanie Brown
+maintainer: brown.m@pm.me
+copyright: 2021 Melanie Brown
+category: Network
+build-type: Simple
+stability: alpha
+-- extra-source-files:
+
+common shared
+  default-language: Haskell2010
+  default-extensions:
+    DerivingStrategies
+    , GeneralizedNewtypeDeriving
+    , ImportQualifiedPost
+    , LambdaCase
+    , MultiWayIf
+    , NamedFieldPuns
+    , OverloadedStrings
+    , PatternSynonyms
+    , QuasiQuotes
+    , RecordWildCards
+    , ScopedTypeVariables
+    , TupleSections
+    , TypeApplications
+    , ViewPatterns
+  ghc-options: -Wall
+  build-depends:
+    base >= 4.14 && < 4.15
+    , relude
+  mixins:
+    base hiding (Prelude)
+    , relude (Relude as Prelude)
+    , relude
+
+library
+  import: shared
+  hs-source-dirs: src
+  exposed-modules:
+    Control.Monad.Email
+    , Network.SMTP
+    , Network.SMTP.Auth
+    , Network.SMTP.Command
+    , Network.SMTP.Email
+    , Network.SMTP.Email.Parse
+    , Network.SMTP.Response
+    , Codec.MIME
+    , Codec.MIME.Boundary
+    , Codec.MIME.ContentTransferEncoding
+    , Codec.MIME.Disposition
+    , Codec.MIME.MediaTypes
+    , Codec.MIME.QuotedPrintable
+    , Codec.MIME.TextEncoding
+  build-depends:
+    base16-bytestring
+    , base64-bytestring
+    , blaze-html
+    , bytestring
+    , connection
+    , cryptonite
+    , http-types
+    , memory
+    , MonadRandom
+    , network
+    , network-bsd
+    , parsec
+    , random >= 1.2.0
+    , template-haskell
+    , time
+    , time-compat
+    , yesod-content-pdf
+  ghc-options: -Wall
+  mixins:
+    base hiding (Prelude)
+    , relude (Relude as Prelude)
+    , relude
+
+test-suite email-tests
+  import: shared
+  type: exitcode-stdio-1.0
+  hs-source-dirs: tests
+  main-is: email-tests.hs
+  ghc-options: -Wall -threaded
+  build-depends:
+    hspec
+    , network
+    , network-bsd
+    , QuickCheck
+    , shakespeare
+    , smtp-hs
+    , template-haskell
