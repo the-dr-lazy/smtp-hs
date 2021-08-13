@@ -30,8 +30,7 @@ data SMTPSettings = SMTPSettings
 class (MonadRandom m, MonadIO m) => MonadSMTP m where
     smtpSettings :: m SMTPSettings
 
-    -- |
-    -- Login to the SMTP server using the 'SMTPSettings', then render and send the email.
+    -- | Login to the SMTP server using the 'SMTPSettings', then render and send the email.
     sendMail :: Mail -> m ()
     sendMail m@Mail{..} = do
         SMTPSettings{..} <- smtpSettings
@@ -40,14 +39,14 @@ class (MonadRandom m, MonadIO m) => MonadSMTP m where
                 SMTPS -> connectSMTP'
                 SMTPSTARTTLS -> connectSMTPSTARTTLS'
         (cxn, _response) <- connect hostname port Nothing tlsSettings
-        flip runReaderT cxn $ do
+        usingReaderT cxn $ do
             void $ commandOrQuit 1 (AUTH LOGIN username password) 235
             let from = emailByteString $ mailboxEmail mailFrom
                 tos = map (emailByteString . mailboxEmail) $ mailTo <> mailCc <> mailBcc
             mrendered <- renderMail m
             case mrendered of
-                Nothing -> liftIO $ fail "TO field empty"
-                Just mail -> do
+                Left er -> liftIO . fail $ show er
+                Right mail -> do
                     void $ commandOrQuit 1 (MAIL from) 250
                     for_ tos $ \r -> commandOrQuit 1 (RCPT r) 250
                     void $ commandOrQuit 1 (DATA $ toStrict mail) 250

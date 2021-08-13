@@ -23,7 +23,6 @@ import Codec.MIME
 import Control.Monad.Random
 import Data.ByteString.Builder (Builder, byteString, toLazyByteString)
 import Data.ByteString.Lazy qualified as BSL
-import Data.List.NonEmpty qualified as NE (fromList)
 import Network.SMTP.Email.Parse
 import Text.Blaze.Html (Html)
 
@@ -66,13 +65,19 @@ mailboxHeaders Mail{..} =
         , map ("Bcc",) mailBcc
         ]
 
-renderMail :: (MonadRandom m) => Mail -> m (Maybe BSL.ByteString)
+data MailRenderError
+    = UnspecifiedTarget
+    | UnspecifiedContent
+    deriving (Eq, Show)
+
+renderMail :: (MonadRandom m) => Mail -> m (Either MailRenderError BSL.ByteString)
 renderMail m@Mail{..} =
     if null mailTo
-        then pure Nothing
-        else
-            Just <$> do
-                PartBuilder{..} <- mixedParts =<< forM (NE.fromList $ sort mailParts) (partBuilder Alternative)
+        then pure $ Left UnspecifiedTarget
+        else case nonEmpty (sort mailParts) of
+            Nothing -> pure $ Left UnspecifiedContent
+            Just parts -> fmap Right $ do
+                PartBuilder{..} <- mixedParts =<< forM parts (partBuilder Alternative)
                 pure . toLazyByteString $
                     fold
                         [ mailboxHeaders m
