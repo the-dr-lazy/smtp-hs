@@ -23,6 +23,7 @@ import Codec.MIME
 import Control.Monad.Random
 import Data.ByteString.Builder (Builder, byteString, toLazyByteString)
 import Data.ByteString.Lazy qualified as BSL
+import Data.List.NonEmpty qualified as NE (fromList)
 import Network.SMTP.Email.Parse
 import Text.Blaze.Html (Html)
 
@@ -48,7 +49,7 @@ data Mail = Mail
     , mailCc :: [Mailbox]
     , mailBcc :: [Mailbox]
     , mailHeaders :: [(Text, Text)]
-    , mailParts :: [NonEmpty ArbitraryPart]
+    , mailParts :: [NonEmpty SomePart]
     }
     deriving (Generic)
 
@@ -71,7 +72,7 @@ renderMail m@Mail{..} =
         then pure Nothing
         else
             Just <$> do
-                PartBuilder{..} <- mixedParts =<< mapM (partBuilder Alternative) (sort mailParts)
+                PartBuilder{..} <- mixedParts =<< forM (NE.fromList $ sort mailParts) (partBuilder Alternative)
                 pure . toLazyByteString $
                     fold
                         [ mailboxHeaders m
@@ -102,10 +103,10 @@ bcc :: [Mailbox] -> Mail -> Mail
 bcc mbxs m = m{mailCc = mbxs <> mailBcc m}
 
 attachPart :: Part mult -> Mail -> Mail
-attachPart p m = m{mailParts = mailParts m ++ [pure $ arbPart p]}
+attachPart p m = m{mailParts = mailParts m ++ [pure $ somePart p]}
 
 attach :: (ToSinglePart part) => part -> Mail -> Mail
-attach p m = m{mailParts = mailParts m ++ [pure . arbPart $ toSinglePart p]}
+attach p m = m{mailParts = mailParts m ++ [pure . somePart $ toSinglePart p]}
 
 attachFile :: (MonadIO m) => FilePath -> Text -> MediaType -> Mail -> m Mail
 attachFile file name media m = filePart file name media <&> (`attachPart` m)
