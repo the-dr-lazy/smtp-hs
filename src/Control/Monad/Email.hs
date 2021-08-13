@@ -17,7 +17,7 @@ import Network.SMTP.Command
 import Network.SMTP.Email
 import Network.Socket (HostName, PortNumber)
 
-data ConnectionMethod = SMTP | SMTPS | SMTPSTARTTLS
+data ConnectionMethod = SMTP | SMTPS | SMTPSTARTTLS deriving (Eq, Show)
 data SMTPSettings = SMTPSettings
     { hostname :: HostName
     , port :: Maybe PortNumber
@@ -26,6 +26,7 @@ data SMTPSettings = SMTPSettings
     , username :: Username
     , password :: Password
     }
+    deriving (Show)
 
 class (MonadRandom m, MonadIO m) => MonadSMTP m where
     smtpSettings :: m SMTPSettings
