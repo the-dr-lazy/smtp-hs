@@ -23,8 +23,8 @@ data SMTPSettings = SMTPSettings
     , port :: Maybe PortNumber
     , cxmethod :: ConnectionMethod
     , tlsSettings :: Maybe TLSSettings
-    , username :: Username
-    , password :: Password
+    , username :: Maybe Username
+    , password :: Maybe Password
     }
     deriving (Show)
 
@@ -41,7 +41,8 @@ class (MonadRandom m, MonadIO m) => MonadSMTP m where
                 SMTPSTARTTLS -> connectSMTPSTARTTLS'
         (cxn, _response) <- connect hostname port Nothing tlsSettings
         usingReaderT cxn $ do
-            void $ commandOrQuit 1 (AUTH LOGIN username password) 235
+            let mup = liftM2 (,) username password
+            whenJust mup $ \(u, p) -> void $ commandOrQuit 1 (AUTH LOGIN u p) 235
             let from = emailByteString $ mailboxEmail mailFrom
                 tos = map (emailByteString . mailboxEmail) $ mailTo <> mailCc <> mailBcc
             mrendered <- renderMail m
