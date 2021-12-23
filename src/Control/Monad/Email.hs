@@ -39,10 +39,10 @@ class (MonadRandom m, MonadIO m) => MonadSMTP m where
                 SMTP -> connectSMTP'
                 SMTPS -> connectSMTP'
                 SMTPSTARTTLS -> connectSMTPSTARTTLS'
-        (cxn, _response) <- connect hostname port Nothing tlsSettings
-        usingReaderT cxn $ do
-            let mup = liftM2 (,) username password
-            whenJust mup $ \(u, p) -> void $ commandOrQuit 1 (AUTH LOGIN u p) 235
+        (connection, _response) <- connect hostname port Nothing tlsSettings
+        usingReaderT connection $ do
+            let credentials = liftM2 (,) username password
+            whenJust credentials $ \(u, p) -> void $ commandOrQuit 1 (AUTH LOGIN u p) 235
             let from = emailByteString $ mailboxEmail mailFrom
                 tos = map (emailByteString . mailboxEmail) $ mailTo <> mailCc <> mailBcc
             mrendered <- renderMail m
