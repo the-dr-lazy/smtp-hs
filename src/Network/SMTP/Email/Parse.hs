@@ -2,8 +2,8 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
-module Network.SMTP.Email.Parse (
-    Email,
+module Network.SMTP.Email.Parse
+  ( Email,
     Mailbox (..),
     email,
     mailbox,
@@ -17,7 +17,8 @@ module Network.SMTP.Email.Parse (
     validateEmail,
     validateMailbox,
     validateMailboxes,
-) where
+  )
+where
 
 import Control.Arrow ((+++))
 import Data.Text qualified as T
@@ -29,9 +30,9 @@ import Text.Parsec.Text (Parser)
 import Prelude hiding (group, (<|>))
 
 data Mailbox = Mailbox
-    { mailboxName :: Maybe Text
-    , mailboxEmail :: Email
-    }
+  { mailboxName :: Maybe Text,
+    mailboxEmail :: Email
+  }
 
 data Email = Email !Text !Text
 
@@ -40,54 +41,54 @@ unsafeEmail = Email
 
 email :: QuasiQuoter
 email =
-    QuasiQuoter
-        { quoteExp = qemail emailexp
-        , quotePat = error "email is not supported as a pattern"
-        , quoteDec = error "email is not supported at top-level"
-        , quoteType = error "email is not supported as a type"
-        }
+  QuasiQuoter
+    { quoteExp = qemail emailexp,
+      quotePat = error "email is not supported as a pattern",
+      quoteDec = error "email is not supported at top-level",
+      quoteType = error "email is not supported as a type"
+    }
   where
     qemail p s =
-        case validateEmail $ toText s of
-            Left err -> error $ "Invalid quasi-quoted email address: " <> toText err
-            Right e -> p e
+      case validateEmail $ toText s of
+        Left err -> error $ "Invalid quasi-quoted email address: " <> toText err
+        Right e -> p e
 
 emailexp :: Email -> ExpQ
 emailexp e =
-    let lp = localPart e
-        dp = domainPart e
-     in [|Email lp dp|]
+  let lp = localPart e
+      dp = domainPart e
+   in [|Email lp dp|]
 
 mailbox :: QuasiQuoter
 mailbox =
-    QuasiQuoter
-        { quoteExp = qmailbox mailboxexp
-        , quotePat = error "mailbox is not supported as a pattern"
-        , quoteDec = error "mailbox is not supported at top-level"
-        , quoteType = error "mailbox is not supported as a type"
-        }
+  QuasiQuoter
+    { quoteExp = qmailbox mailboxexp,
+      quotePat = error "mailbox is not supported as a pattern",
+      quoteDec = error "mailbox is not supported at top-level",
+      quoteType = error "mailbox is not supported as a type"
+    }
   where
     qmailbox p s =
-        case validateMailbox $ toText s of
-            Left err -> error $ "Invalid quasi-quoted mailbox: " <> toText err
-            Right e -> p e
+      case validateMailbox $ toText s of
+        Left err -> error $ "Invalid quasi-quoted mailbox: " <> toText err
+        Right e -> p e
 
 mailboxexp :: Mailbox -> ExpQ
-mailboxexp Mailbox{..} = [|Mailbox mailboxName $(emailexp mailboxEmail)|]
+mailboxexp Mailbox {..} = [|Mailbox mailboxName $(emailexp mailboxEmail)|]
 
 mailboxes :: QuasiQuoter
 mailboxes =
-    QuasiQuoter
-        { quoteExp = qmailbox (listE . map mailboxexp . toList)
-        , quotePat = error "mailboxes is not supported as a pattern"
-        , quoteDec = error "mailboxes is not supported at top-level"
-        , quoteType = error "mailboxes is not supported as a type"
-        }
+  QuasiQuoter
+    { quoteExp = qmailbox (listE . map mailboxexp . toList),
+      quotePat = error "mailboxes is not supported as a pattern",
+      quoteDec = error "mailboxes is not supported at top-level",
+      quoteType = error "mailboxes is not supported as a type"
+    }
   where
     qmailbox p s =
-        case validateMailboxes $ toText s of
-            Left err -> error $ "Invalid quasi-quoted mailbox list: " <> toText err
-            Right e -> p e
+      case validateMailboxes $ toText s of
+        Left err -> error $ "Invalid quasi-quoted mailbox list: " <> toText err
+        Right e -> p e
 
 emailByteString :: Email -> ByteString
 emailByteString (Email l d) = encodeUtf8 l <> "@" <> encodeUtf8 d
@@ -114,11 +115,13 @@ validateMailboxes = (show +++ id) . parse (mailboxList <* eof) ""
 -- Parsing
 
 infix 2 ?>
+
 (?>) :: (Alternative f) => Bool -> a -> f a
 b ?> a = if b then pure a else empty
 
 -- backtracking
 infixl 4 <|>
+
 (<|>) :: (Stream s m t) => ParsecT s u m a -> ParsecT s u m a -> ParsecT s u m a
 a <|> b = TP.choice [TP.try a, TP.try b]
 
@@ -245,18 +248,18 @@ groupList = fmap toList mailboxList <|> fmap (const []) (cfws <|> obsGroupList)
 
 addrSpec :: Parser Email
 addrSpec = do
-    l <- localpart
+  l <- localpart
 
-    -- Maximum length of local-part is 64, per RFC3696
-    when (T.length l > 64) (fail "local-part of email is too long (more than 64 octets)")
+  -- Maximum length of local-part is 64, per RFC3696
+  when (T.length l > 64) (fail "local-part of email is too long (more than 64 octets)")
 
-    void (char '@') <?> "at sign"
-    d <- domain
+  void (char '@') <?> "at sign"
+  d <- domain
 
-    -- Maximum length is 254, per Erratum 1690 on RFC3696
-    when (T.length l + T.length d > 253) (fail "email address is too long (more than 254 octets)")
+  -- Maximum length is 254, per Erratum 1690 on RFC3696
+  when (T.length l + T.length d > 253) (fail "email address is too long (more than 254 octets)")
 
-    pure $ Email l d
+  pure $ Email l d
 
 localpart :: Parser Text
 localpart = dotAtom <|> quotedstring <|> obsLocalPart
@@ -266,19 +269,19 @@ domain = domainname <|> domainliteral <|> obsDomain
 
 domainname :: Parser Text
 domainname = do
-    dom <- T.intercalate "." <$> domainlabel `sepEndBy1` string "."
+  dom <- T.intercalate "." <$> domainlabel `sepEndBy1` string "."
 
-    T.length dom <= 253 ?> dom
+  T.length dom <= 253 ?> dom
 
 domainlabel :: Parser Text
 domainlabel = do
-    content <- optional cfws *> ((:|) <$> alphaNum <*> many (alphaNum <|> char '-')) <* optional cfws
+  content <- optional cfws *> ((:|) <$> alphaNum <*> many (alphaNum <|> char '-')) <* optional cfws
 
-    length content <= 63 && last content /= '-' ?> toText (toList content)
+  length content <= 63 && last content /= '-' ?> toText (toList content)
 
 domainliteral :: Parser Text
 domainliteral =
-    fmap fold $ optional cfws *> char '[' *> many (optional fws *> dtext) <* optional fws <* char ']' <* optional cfws
+  fmap fold $ optional cfws *> char '[' *> many (optional fws *> dtext) <* optional fws <* char ']' <* optional cfws
 
 dtext :: Parser Text
 dtext = fmap one (ranges [[33 .. 90], [94 .. 126]]) <|> obsDtext
@@ -319,25 +322,25 @@ obsRoute = obsDomainList <* char ':'
 
 obsDomainList :: Parser [Text]
 obsDomainList = do
-    void $ many (cfws <|> void (char ','))
-    void $ char '@'
-    dom <- domain
-    doms <- many (char ',' *> optional cfws *> optional (char '@' *> domain))
-    pure $ dom : catMaybes doms
+  void $ many (cfws <|> void (char ','))
+  void $ char '@'
+  dom <- domain
+  doms <- many (char ',' *> optional cfws *> optional (char '@' *> domain))
+  pure $ dom : catMaybes doms
 
 obsMboxList :: Parser (NonEmpty Mailbox)
 obsMboxList = do
-    void . many $ optional cfws *> char ','
-    mb <- mailbox'
-    mbs <- many $ char ',' *> optional (fmap Just mailbox' <|> (Nothing <$ cfws))
-    pure $ mb :| mapMaybe join mbs
+  void . many $ optional cfws *> char ','
+  mb <- mailbox'
+  mbs <- many $ char ',' *> optional (fmap Just mailbox' <|> (Nothing <$ cfws))
+  pure $ mb :| mapMaybe join mbs
 
 obsAddrList :: Parser [Mailbox]
 obsAddrList = do
-    void . many $ optional cfws *> char ','
-    mb <- addresses
-    mbs <- many $ char ',' *> optional (fmap Just addresses <|> (Nothing <$ cfws))
-    pure $ mb <> concatMap (fromMaybe [] . join) mbs
+  void . many $ optional cfws *> char ','
+  mb <- addresses
+  mbs <- many $ char ',' *> optional (fmap Just addresses <|> (Nothing <$ cfws))
+  pure $ mb <> concatMap (fromMaybe [] . join) mbs
 
 obsGroupList :: Parser ()
 obsGroupList = void $ many1 (optional cfws *> char ',') *> optional cfws
