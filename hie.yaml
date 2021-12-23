@@ -4,4 +4,7 @@ cradle:
       component: "lib:smtp-hs"
 
     - path: "./tests"
+      component: "smtp-hs:test:codec-tests"
+
+    - path: "./tests"
       component: "smtp-hs:test:email-tests"

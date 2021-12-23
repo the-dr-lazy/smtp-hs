@@ -1,4 +1,4 @@
-module Codec.MIME.MediaTypes
+module Codec.MIME.ContentTypes
   ( ContentType (..),
     contenttype,
     parseContentType,

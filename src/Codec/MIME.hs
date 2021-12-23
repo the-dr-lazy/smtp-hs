@@ -27,8 +27,8 @@ where
 
 import Codec.MIME.Boundary as MIME
 import Codec.MIME.ContentTransferEncoding as MIME
+import Codec.MIME.ContentTypes as MIME
 import Codec.MIME.Disposition as MIME
-import Codec.MIME.MediaTypes as MIME
 import Codec.MIME.QuotedPrintable as MIME
 import Codec.MIME.TextEncoding as MIME
 import Control.Monad (liftM3)
