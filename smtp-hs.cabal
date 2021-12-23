@@ -79,7 +79,6 @@ library
     , time
     , time-compat
     , yesod-content-pdf
-  ghc-options: -Wall
   mixins:
     base hiding (Prelude)
     , relude (Relude as Prelude)
@@ -90,22 +89,17 @@ test-suite codec-tests
   type: exitcode-stdio-1.0
   hs-source-dirs: tests
   main-is: codec-tests.hs
-  ghc-options: -Wall -threaded
+  ghc-options: -threaded
   build-depends:
     hspec
-    , network
-    , network-bsd
-    , QuickCheck
-    , shakespeare
     , smtp-hs
-    , template-haskell
 
 test-suite email-tests
   import: shared
   type: exitcode-stdio-1.0
   hs-source-dirs: tests
   main-is: email-tests.hs
-  ghc-options: -Wall -threaded
+  ghc-options: -threaded
   build-depends:
     hspec
     , network
