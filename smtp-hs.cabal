@@ -3,8 +3,8 @@ cabal-version: 2.4
 name: smtp-hs
 version: 0.0.1.0
 synopsis: A self-contained library for working with MIME and sending email via SMTP.
-homepage: https://github.com/bi-functor/smtp-hs
-bug-reports: https://github.com/bi-functor/smtp-hs/issues
+homepage: https://github.com/cigsender/smtp-hs
+bug-reports: https://github.com/cigsender/smtp-hs/issues
 license: BSD-3-Clause
 license-file: LICENSE
 author: Melanie Brown
