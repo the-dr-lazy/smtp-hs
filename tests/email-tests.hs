@@ -12,17 +12,17 @@ melbox = [mailbox|Melanie Brown <brown.m@pm.me>|]
 
 testmsg :: Mail
 testmsg =
-    newmessage melbox
-        & to [melbox]
-        & subject "Testing out package smtp-hs"
-        & body
-            [shamlet|
-                <html>
-                  <style>
-                    .green {
-                      background-color: #009fff;
-                    }
-                  <body>
-                    <p>Test content.
-                    <p .green>Please ignore.
-            |]
+  newmessage melbox
+    & to [melbox]
+    & subject "Testing out package smtp-hs"
+    & body
+      [shamlet|
+          <html>
+            <style>
+              .green {
+                background-color: #009fff;
+              }
+            <body>
+              <p>Test content.
+              <p .green>Please ignore.
+      |]

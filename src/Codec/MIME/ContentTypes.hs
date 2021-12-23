@@ -27,7 +27,7 @@ data ContentType = ContentType
   { mediaType :: MediaType,
     contentParams :: [(Text, Text)]
   }
-  deriving (Eq)
+  deriving (Eq, Show)
 
 -- | Get the proper 'Text' value for a 'ContentType'.
 contenttype :: ContentType -> Text
@@ -40,10 +40,10 @@ parseContentType = parse contentTypeP ""
 contentTypeP :: Parser ContentType
 contentTypeP = do
   mediaType <- mediaTypeP <* optional (char ';')
-  contentParams <- many $ on (,) toText <$> manyTill accepted (char '=') <*> many accepted
+  contentParams <- (on (,) toText <$> manyTill accepted (char '=') <*> many accepted) `sepBy` char ';'
   pure ContentType {..}
   where
-    accepted = try alphaNum <|> oneOf "-_."
+    accepted = try alphaNum <|> oneOf "-_.'"
 
 -- |
 -- The media type for the content beneath the header.
@@ -62,7 +62,7 @@ data MediaType
   | Multipart Multipart
   | Text [Text]
   | Video [Text]
-  deriving (Eq, Show)
+  deriving (Eq, Ord, Show)
 
 -- | Get the proper 'Text' value for a 'MediaType'.
 mediatype :: MediaType -> Text
@@ -113,7 +113,7 @@ mediaTypeP =
     videoP =
       Video . map toText <$ string "video/" <*> (many accepted `sepBy` try (char '+'))
 
-    accepted = try alphaNum <|> oneOf "-_."
+    accepted = try alphaNum <|> oneOf "-_.'"
 
 -- |
 -- Typical values of multipart media types.
@@ -133,7 +133,7 @@ data Multipart
   | Report
   | Signed
   | VoiceMessage
-  deriving (Eq, Ord, Enum, Bounded, Show)
+  deriving (Eq, Ord, Show)
 
 -- | Get the proper 'Text' value for a 'Multipart' value.
 multipart :: Multipart -> Text
