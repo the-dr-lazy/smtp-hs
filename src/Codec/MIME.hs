@@ -38,6 +38,7 @@ import Data.ByteString.Builder (Builder, byteString, lazyByteString)
 import Data.ByteString.Lazy qualified as BSL
 import Data.Char (isAscii)
 import Data.Text qualified as T
+import System.FilePath (takeBaseName, takeExtension)
 import Text.Blaze.Html
 import Text.Blaze.Html.Renderer.Utf8 (renderHtml)
 import Yesod.Content.PDF (PDF (pdfBytes))
@@ -51,15 +52,15 @@ data Mult = One | Many
 -- different translations of the same content.
 --
 -- Aside from its content, a 'Part' has a 'ContentType', possibly a 'Disposition',
--- possibly a 'ContentTransferEncoding', possibly a "location" (or URI) where it
+-- possibly a 'ContentTransferEncoding', possibly a "partLocation" (or URI) where it
 -- can be found, and perhaps additional headers.
 data Part mult = Part
-  { mimeType :: ContentType,
-    disp :: Maybe Disposition,
-    encoding :: Maybe ContentTransferEncoding,
-    location :: Maybe Text,
-    partheaders :: [(Text, Text)],
-    partcontent :: PartContent mult
+  { partContentType :: ContentType,
+    partDisposition :: Maybe Disposition,
+    partEncoding :: Maybe ContentTransferEncoding,
+    partLocation :: Maybe Text,
+    partHeaders :: [(Text, Text)],
+    partContent :: PartContent mult
   }
 
 -- |
@@ -96,15 +97,15 @@ buildHeaders (hname, hval) =
 
 -- | Prepare a standalone 'Part' for 'ByteString' conversion.
 singleBuilder :: Part 'One -> PartBuilder
-singleBuilder Part {partcontent = Single bs, ..} = PartBuilder {..}
+singleBuilder Part {partContent = Single bs, ..} = PartBuilder {..}
   where
     headers =
-      (("Content-Type", contenttype mimeType) :)
-        . maybe id (\e -> (("Content-Transfer-Encoding", contenttransferencoding e) :)) encoding
-        . maybe id (\d -> (("Content-Disposition", disposition d) :)) disp
-        . maybe id (\loc -> (("Content-Location", loc) :)) location
-        $ partheaders
-    bsbuilder = case encoding of
+      (("Content-Type", contenttype partContentType) :)
+        . maybe id (\e -> (("Content-Transfer-Encoding", contenttransferencoding e) :)) partEncoding
+        . maybe id (\d -> (("Content-Disposition", disposition d) :)) partDisposition
+        . maybe id (\loc -> (("Content-Location", loc) :)) partLocation
+        $ partHeaders
+    bsbuilder = case partEncoding of
       Just Base64 ->
         foldMap' ((<> "\r\n") . lazyByteString . B64L.encode) $
           unfoldr (liftM3 bool (const Nothing) (Just . BSL.splitAt 57) BSL.null) bs
@@ -113,20 +114,20 @@ singleBuilder Part {partcontent = Single bs, ..} = PartBuilder {..}
 
 -- | Prepare a nested 'Part' for 'ByteString' conversion. A 'Boundary' delineator is required.
 multipleBuilder :: Boundary -> Part 'Many -> PartBuilder
-multipleBuilder (Boundary bdy) Part {partcontent = Multiple ps} = PartBuilder {..}
+multipleBuilder (Boundary bdy) Part {partContent = Multiple ps} = PartBuilder {..}
   where
     headers = [("Content-Type", contenttype $ ContentType (Multipart Related) [("boundary", bdy)])]
     bsbuilder = foldMap (boundarypart bdy) ps <> "--" <> byteString (encodeUtf8 bdy) <> "--"
 
     boundarypart :: Text -> Part 'One -> Builder
-    boundarypart bd Part {partcontent = Single bs, partheaders} =
+    boundarypart bd Part {partContent = Single bs, partHeaders} =
       foldMap byteString ["--", encodeUtf8 bd, "\n"]
-        <> foldMap buildHeaders partheaders
+        <> foldMap buildHeaders partHeaders
         <> "\n"
         <> lazyByteString bs
         <> "\n"
 
--- | Delay the handling of the multiplicity of a part for the purposes of encoding the entire message.
+-- | Delay the handling of the multiplicity of a part for the purposes of 'partEncoding' the entire message.
 data SomePart
   = SPOne (Part 'One)
   | SPMany (Part 'Many)
@@ -134,15 +135,19 @@ data SomePart
 instance Eq SomePart where _ == _ = False
 
 instance Ord SomePart where
-  SPOne part `compare` SPOne part' = fmap dispType (disp part) `compare` fmap dispType (disp part')
-  SPOne part `compare` SPMany part' = fmap dispType (disp part) `compare` fmap dispType (disp part')
-  SPMany part `compare` SPOne part' = fmap dispType (disp part) `compare` fmap dispType (disp part')
-  SPMany part `compare` SPMany part' = fmap dispType (disp part) `compare` fmap dispType (disp part')
+  SPOne part `compare` SPOne part' =
+    comparing (fmap dispType) (partDisposition part) (partDisposition part')
+  SPOne part `compare` SPMany part' =
+    comparing (fmap dispType) (partDisposition part) (partDisposition part')
+  SPMany part `compare` SPOne part' =
+    comparing (fmap dispType) (partDisposition part) (partDisposition part')
+  SPMany part `compare` SPMany part' =
+    comparing (fmap dispType) (partDisposition part) (partDisposition part')
 
 -- | Wrap the multiplicity of a 'Part'.
 somePart :: Part mult -> SomePart
-somePart p@Part {partcontent = Single _} = SPOne p
-somePart p@Part {partcontent = Multiple _} = SPMany p
+somePart p@Part {partContent = Single _} = SPOne p
+somePart p@Part {partContent = Multiple _} = SPMany p
 
 -- | Build a message from a collection of parts of arbitrary multiplicity.
 --
@@ -190,68 +195,65 @@ mixedParts ps = do
 -- is simply converted to UTF-8. Files may have their own appropriate MIME types, so be sure
 -- to declare this instance for its representation if you plan to send it via email.
 class ToSinglePart a where
-  partMIMEType :: proxy a -> ContentType
-  default partMIMEType :: (ToText a) => proxy a -> ContentType
-  partMIMEType _ = ContentType TextPlain [("charset", "utf-8")]
+  contentTypeFor :: Const ContentType a
+  default contentTypeFor :: (ToText a) => Const ContentType a
+  contentTypeFor = Const $ ContentType TextPlain [("charset", "utf-8")]
 
-  partDisposition :: proxy a -> Maybe Disposition
-  default partDisposition :: (ToText a) => proxy a -> Maybe Disposition
-  partDisposition _ = Nothing
+  dispositionFor :: Const (Maybe Disposition) a
+  default dispositionFor :: (ToText a) => Const (Maybe Disposition) a
+  dispositionFor = Const Nothing
 
-  partEncoding :: proxy a -> Maybe ContentTransferEncoding
-  default partEncoding :: (ToText a) => proxy a -> Maybe ContentTransferEncoding
-  partEncoding _ = Just $ QuotedPrintable True
+  encodingFor :: Const (Maybe ContentTransferEncoding) a
+  default encodingFor :: (ToText a) => Const (Maybe ContentTransferEncoding) a
+  encodingFor = Const (Just (QuotedPrintable True))
 
-  partContent :: a -> BSL.ByteString
+  makePartContent :: a -> BSL.ByteString
 
--- | Convert a value to a 'Part' with the default encoding for its type.
+-- | Convert a value to a 'Part' with the default 'partDisposition' and 'partEncoding' for its type.
 toSinglePart :: forall a. (ToSinglePart a) => a -> Part 'One
 toSinglePart a = Part {..}
   where
-    mimeType = partMIMEType prox
-    disp = partDisposition prox
-    encoding = partEncoding prox
-    location = Nothing
-    partheaders = []
-    partcontent = Single $ partContent a
-    prox = Proxy @a
+    Const partContentType = contentTypeFor @a
+    Const partDisposition = dispositionFor @a
+    Const partEncoding = encodingFor @a
+    partLocation = Nothing
+    partHeaders = []
+    partContent = Single (makePartContent a)
 
 -- | Convert a file to a 'Part', with the specified file path, file name and media type.
 filePart :: (MonadIO m) => FilePath -> Text -> MediaType -> m (Part 'One)
 filePart fp name media = do
-  content <- readFileLBS fp
-  let mimeType = ContentType media [("charset", "utf-8")]
-      disp = Just $ Disposition Attachment [FilenameStar name]
-      encoding = Just Base64
-      location = Just name
-      partheaders = []
-      partcontent = Single content
+  let partContentType = ContentType media [("charset", "utf-8")]
+      partDisposition = Just (Disposition Attachment [FilenameStar name])
+      partEncoding = Just Base64
+      partLocation = Just name
+      partHeaders = []
+  partContent <- Single <$> readFileLBS fp
   pure Part {..}
 
 -- | Add the image at the specified file path to an email message.
 imagePart :: (MonadIO m) => FilePath -> m (Part 'One)
 imagePart fp = do
-  content <- readFileLBS fp
-  let name = T.takeWhileEnd (/= '/') $ toText fp
-      ext = T.takeWhileEnd (/= '.') $ toText fp
-      mimeType = ContentType (Image [ext]) []
-      disp = Just $ Disposition Inline [FilenameStar name]
-      encoding = Just Base64
-      location = Just name
-      partheaders = []
-      partcontent = Single content
+  let name = toText $ takeBaseName fp
+      ext = toText $ takeExtension fp
+      partContentType = ContentType (Image [ext]) []
+      partDisposition = Just (Disposition Inline [FilenameStar name])
+      partEncoding = Just Base64
+      partLocation = Just name
+      partHeaders = []
+  partContent <- Single <$> readFileLBS fp
   pure Part {..}
 
-instance ToSinglePart Text where partContent = encodeUtf8
+instance ToSinglePart Text where makePartContent = encodeUtf8
 
 instance ToSinglePart Html where
-  partMIMEType _ = ContentType TextHtml [("charset", "utf-8")]
-  partDisposition _ = Nothing
-  partEncoding _ = Just $ QuotedPrintable True
-  partContent = renderHtml
+  contentTypeFor = Const (ContentType TextHtml [("charset", "utf-8")])
+  dispositionFor = Const Nothing
+  encodingFor = Const (Just (QuotedPrintable True))
+  makePartContent = renderHtml
 
 instance ToSinglePart PDF where
-  partMIMEType _ = ContentType ApplicationPdf [("charset", "utf-8")]
-  partDisposition _ = Just $ Disposition Attachment []
-  partEncoding _ = Just Base64
-  partContent = fromStrict . pdfBytes
+  contentTypeFor = Const (ContentType ApplicationPdf [("charset", "utf-8")])
+  dispositionFor = Const (Just (Disposition Attachment []))
+  encodingFor = Const (Just Base64)
+  makePartContent = fromStrict . pdfBytes
