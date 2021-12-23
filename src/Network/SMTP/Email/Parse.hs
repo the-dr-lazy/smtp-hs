@@ -34,6 +34,11 @@ data Mailbox = Mailbox
     mailboxEmail :: Email
   }
 
+-- |
+-- Abstract data type representing an email address.
+--
+-- Use 'localPart' and 'domainPart' to extract those substrings,
+-- or 'emailByteString' for the complete address in UTF-8.
 data Email = Email !Text !Text
 
 unsafeEmail :: Text -> Text -> Email
