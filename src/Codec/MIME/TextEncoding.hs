@@ -24,31 +24,31 @@ utf8 (ord -> n) =
 -- | Like%20this
 rfc5987 :: Text -> Text
 rfc5987 = T.concatMap (liftM3 bool escape one attrchar) . T.filter (not . isControl)
-  where
-    attrchar :: Char -> Bool
-    attrchar = isAlpha ||^ isAsciiDigit ||^ (`elem` ("!#$&+-.^_`|~" :: String))
+ where
+  attrchar :: Char -> Bool
+  attrchar = isAlpha ||^ isAsciiDigit ||^ (`elem` ("!#$&+-.^_`|~" :: String))
 
-    isAsciiDigit :: Char -> Bool
-    isAsciiDigit = isAscii &&^ isDigit
+  isAsciiDigit :: Char -> Bool
+  isAsciiDigit = isAscii &&^ isDigit
 
-    escape :: Char -> Text
-    escape = foldMap (T.toUpper . toText . ('%' :) . (`showHex` "")) . utf8
+  escape :: Char -> Text
+  escape = foldMap (T.toUpper . toText . ('%' :) . (`showHex` "")) . utf8
 
 -- | Header name format
 rfc2822 :: Text -> ByteString
 rfc2822 = T.foldl' (\acc c -> acc <> enc c) mempty
-  where
-    enc :: Char -> ByteString
-    enc (fromIntegral . ord -> c)
-      | c `elem` specials = esc (hex c)
-      | 33 <= c && c <= 126 = one c
-      | otherwise = esc (hex c)
-      where
-        esc :: Word8 -> ByteString
-        esc w = foldMap' one [61, shiftR w 4, w .&. 15]
+ where
+  enc :: Char -> ByteString
+  enc (fromIntegral . ord -> c)
+    | c `elem` specials = esc (hex c)
+    | 33 <= c && c <= 126 = one c
+    | otherwise = esc (hex c)
+   where
+    esc :: Word8 -> ByteString
+    esc w = foldMap' one [61, shiftR w 4, w .&. 15]
 
-        hex :: Word8 -> Word8
-        hex w = if w < 10 then w + 48 else w + 55
+    hex :: Word8 -> Word8
+    hex w = if w < 10 then w + 48 else w + 55
 
-    specials :: [Word8]
-    specials = unpack $ encodeUtf8 ("\"()<>[]:;@\\,.?_=" :: Text)
+  specials :: [Word8]
+  specials = unpack $ encodeUtf8 ("\"()<>[]:;@\\,.?_=" :: Text)

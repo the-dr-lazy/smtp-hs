@@ -41,12 +41,12 @@ sendCommand = \case
     traverse_ (cputLine . padDot . stripCR) $ BS.split lf bs
     cputLine "."
     response
-    where
-      padDot, stripCR :: ByteString -> ByteString
-      stripCR s = BS.stripSuffix "\r" s ?: s
-      padDot s = "." <> (BS.stripPrefix "." s ?: s)
-      lf :: Word8
-      lf = fromIntegral $ ord '\n'
+   where
+    padDot, stripCR :: ByteString -> ByteString
+    stripCR s = BS.stripSuffix "\r" s ?: s
+    padDot s = "." <> (BS.stripPrefix "." s ?: s)
+    lf :: Word8
+    lf = fromIntegral $ ord '\n'
   AUTH LOGIN user pw -> do
     let (u, p) = encodeLogin user pw
     cputLine "AUTH LOGIN"

@@ -1,8 +1,7 @@
-module Codec.MIME.ContentTransferEncoding
-  ( ContentTransferEncoding (..),
-    contenttransferencoding,
-  )
-where
+module Codec.MIME.ContentTransferEncoding (
+  ContentTransferEncoding (..),
+  contenttransferencoding,
+) where
 
 -- |
 -- The value of the "Content-Transfer-Encoding" header, can be "base64" or "quoted-printable".

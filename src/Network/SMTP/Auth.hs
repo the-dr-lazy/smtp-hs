@@ -1,11 +1,10 @@
-module Network.SMTP.Auth
-  ( Username (..),
-    Password,
-    AuthType (..),
-    encodeLogin,
-    auth,
-  )
-where
+module Network.SMTP.Auth (
+  Username (..),
+  Password,
+  AuthType (..),
+  encodeLogin,
+  auth,
+) where
 
 import Crypto.Hash.Algorithms (MD5)
 import Crypto.MAC.HMAC (HMAC, hmac)
@@ -51,6 +50,6 @@ auth at c user@(Username u) pw@(Password p) = case at of
   PLAIN -> B64.encode . ascii $ T.intercalate "\0" [u, u, p]
   LOGIN -> let (u', p') = encodeLogin user pw in B8.unwords [u', p']
   CRAM_MD5 -> B64.encode $ B8.unwords [ascii u, B16.encode $ hmacMD5 (ascii c) (ascii p)]
-  where
-    hmacMD5 :: ByteString -> ByteString -> ByteString
-    hmacMD5 chlg pwd = copyAndFreeze (hmac pwd chlg :: HMAC MD5) (const $ pure ())
+ where
+  hmacMD5 :: ByteString -> ByteString -> ByteString
+  hmacMD5 chlg pwd = copyAndFreeze (hmac pwd chlg :: HMAC MD5) (const $ pure ())

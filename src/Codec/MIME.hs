@@ -6,24 +6,23 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Codec.MIME
-  ( module MIME,
-    Part (..),
-    related,
-    PartContent (..),
-    PartBuilder (..),
-    SomePart (..),
-    somePart,
-    encodeEscapedUtf8,
-    buildHeaders,
-    partBuilder,
-    mixedParts,
-    ToSinglePart (..),
-    toSinglePart,
-    filePart,
-    imagePart,
-  )
-where
+module Codec.MIME (
+  module MIME,
+  Part (..),
+  related,
+  PartContent (..),
+  PartBuilder (..),
+  SomePart (..),
+  somePart,
+  encodeEscapedUtf8,
+  buildHeaders,
+  partBuilder,
+  mixedParts,
+  ToSinglePart (..),
+  toSinglePart,
+  filePart,
+  imagePart,
+) where
 
 import Codec.MIME.Boundary as MIME
 import Codec.MIME.ContentTransferEncoding as MIME
@@ -55,12 +54,12 @@ data Mult = One | Many
 -- possibly a 'ContentTransferEncoding', possibly a "partLocation" (or URI) where it
 -- can be found, and perhaps additional headers.
 data Part mult = Part
-  { partContentType :: ContentType,
-    partDisposition :: Maybe Disposition,
-    partEncoding :: Maybe ContentTransferEncoding,
-    partLocation :: Maybe Text,
-    partHeaders :: [(Text, Text)],
-    partContent :: PartContent mult
+  { partContentType :: ContentType
+  , partDisposition :: Maybe Disposition
+  , partEncoding :: Maybe ContentTransferEncoding
+  , partLocation :: Maybe Text
+  , partHeaders :: [(Text, Text)]
+  , partContent :: PartContent mult
   }
 
 -- |
@@ -74,13 +73,14 @@ data PartContent (mult :: Mult) where
 -- An intermediate step between the datatype representation of a 'Part' and the
 -- raw 'ByteString' representing its section of the email message.
 data PartBuilder = PartBuilder
-  { headers :: [(Text, Text)],
-    bsbuilder :: Builder
+  { headers :: [(Text, Text)]
+  , bsbuilder :: Builder
   }
 
 -- | Connect multiple standalone 'Part's into a @multipart/related@ 'Part'.
 related :: NonEmpty (Part 'One) -> Part 'Many
-related parts = Part (ContentType MultipartRelated []) Nothing Nothing Nothing [] (Multiple parts)
+related parts =
+  Part (ContentType MultipartRelated []) Nothing Nothing Nothing [] (Multiple parts)
 
 encodeEscapedUtf8 :: Text -> Builder
 encodeEscapedUtf8 t = fold ["=?utf-8?Q?", byteString $ rfc2822 t, "?="]
@@ -89,43 +89,43 @@ encodeEscapedUtf8 t = fold ["=?utf-8?Q?", byteString $ rfc2822 t, "?="]
 buildHeaders :: (Text, Text) -> Builder
 buildHeaders (hname, hval) =
   fold
-    [ byteString . encodeUtf8 $ T.filter (\w -> w /= ':' && '!' <= w && w <= '~') hname,
-      ": ",
-      if T.all isAscii hval then byteString $ encodeUtf8 hval else encodeEscapedUtf8 hval,
-      "\n"
+    [ byteString . encodeUtf8 $ T.filter (\w -> w /= ':' && '!' <= w && w <= '~') hname
+    , ": "
+    , if T.all isAscii hval then byteString $ encodeUtf8 hval else encodeEscapedUtf8 hval
+    , "\n"
     ]
 
 -- | Prepare a standalone 'Part' for 'ByteString' conversion.
 singleBuilder :: Part 'One -> PartBuilder
-singleBuilder Part {partContent = Single bs, ..} = PartBuilder {..}
-  where
-    headers =
-      (("Content-Type", contenttype partContentType) :)
-        . maybe id (\e -> (("Content-Transfer-Encoding", contenttransferencoding e) :)) partEncoding
-        . maybe id (\d -> (("Content-Disposition", disposition d) :)) partDisposition
-        . maybe id (\loc -> (("Content-Location", loc) :)) partLocation
-        $ partHeaders
-    bsbuilder = case partEncoding of
-      Just Base64 ->
-        foldMap' ((<> "\r\n") . lazyByteString . B64L.encode) $
-          unfoldr (liftM3 bool (const Nothing) (Just . BSL.splitAt 57) BSL.null) bs
-      Just (QuotedPrintable txt) -> qpBuilder $ toQP txt bs
-      Nothing -> lazyByteString bs
+singleBuilder Part{partContent = Single bs, ..} = PartBuilder{..}
+ where
+  headers =
+    (("Content-Type", contenttype partContentType) :)
+      . maybe id (\e -> (("Content-Transfer-Encoding", contenttransferencoding e) :)) partEncoding
+      . maybe id (\d -> (("Content-Disposition", disposition d) :)) partDisposition
+      . maybe id (\loc -> (("Content-Location", loc) :)) partLocation
+      $ partHeaders
+  bsbuilder = case partEncoding of
+    Just Base64 ->
+      foldMap' ((<> "\r\n") . lazyByteString . B64L.encode) $
+        unfoldr (liftM3 bool (const Nothing) (Just . BSL.splitAt 57) BSL.null) bs
+    Just (QuotedPrintable txt) -> qpBuilder $ toQP txt bs
+    Nothing -> lazyByteString bs
 
 -- | Prepare a nested 'Part' for 'ByteString' conversion. A 'Boundary' delineator is required.
 multipleBuilder :: Boundary -> Part 'Many -> PartBuilder
-multipleBuilder (Boundary bdy) Part {partContent = Multiple ps} = PartBuilder {..}
-  where
-    headers = [("Content-Type", contenttype $ ContentType (Multipart Related) [("boundary", bdy)])]
-    bsbuilder = foldMap (boundarypart bdy) ps <> "--" <> byteString (encodeUtf8 bdy) <> "--"
+multipleBuilder (Boundary bdy) Part{partContent = Multiple ps} = PartBuilder{..}
+ where
+  headers = [("Content-Type", contenttype $ ContentType (Multipart Related) [("boundary", bdy)])]
+  bsbuilder = foldMap (boundarypart bdy) ps <> "--" <> byteString (encodeUtf8 bdy) <> "--"
 
-    boundarypart :: Text -> Part 'One -> Builder
-    boundarypart bd Part {partContent = Single bs, partHeaders} =
-      foldMap byteString ["--", encodeUtf8 bd, "\n"]
-        <> foldMap buildHeaders partHeaders
-        <> "\n"
-        <> lazyByteString bs
-        <> "\n"
+  boundarypart :: Text -> Part 'One -> Builder
+  boundarypart bd Part{partContent = Single bs, partHeaders} =
+    foldMap byteString ["--", encodeUtf8 bd, "\n"]
+      <> foldMap buildHeaders partHeaders
+      <> "\n"
+      <> lazyByteString bs
+      <> "\n"
 
 -- | Delay the handling of the multiplicity of a part for the purposes of 'partEncoding' the entire message.
 data SomePart
@@ -146,8 +146,8 @@ instance Ord SomePart where
 
 -- | Wrap the multiplicity of a 'Part'.
 somePart :: Part mult -> SomePart
-somePart p@Part {partContent = Single _} = SPOne p
-somePart p@Part {partContent = Multiple _} = SPMany p
+somePart p@Part{partContent = Single _} = SPOne p
+somePart p@Part{partContent = Multiple _} = SPMany p
 
 -- | Build a message from a collection of parts of arbitrary multiplicity.
 --
@@ -162,15 +162,15 @@ partBuilder m arbs = do
   Boundary bdy <- getRandom
   let headers = [("Content-Type", contenttype $ ContentType (Multipart m) [("boundary", bdy)])]
       bsbuilder = foldMap (boundarypart bdy) pbs <> "--" <> byteString (encodeUtf8 bdy) <> "--"
-  pure PartBuilder {..}
-  where
-    boundarypart :: Text -> PartBuilder -> Builder
-    boundarypart bdy PartBuilder {..} =
-      foldMap byteString ["--", encodeUtf8 bdy, "\n"]
-        <> foldMap buildHeaders headers
-        <> "\n"
-        <> bsbuilder
-        <> "\n"
+  pure PartBuilder{..}
+ where
+  boundarypart :: Text -> PartBuilder -> Builder
+  boundarypart bdy PartBuilder{..} =
+    foldMap byteString ["--", encodeUtf8 bdy, "\n"]
+      <> foldMap buildHeaders headers
+      <> "\n"
+      <> bsbuilder
+      <> "\n"
 
 -- | Create a 'PartBuilder' for the entire message given the 'PartBuilder's for each of its parts.
 -- The result will have a MIME type of @multipart/mixed@.
@@ -179,15 +179,15 @@ mixedParts ps = do
   Boundary bdy <- getRandom
   let headers = [("Content-Type", contenttype $ ContentType (Multipart Mixed) [("boundary", bdy)])]
       bsbuilder = foldMap (boundarypart bdy) ps <> "--" <> byteString (encodeUtf8 bdy) <> "--"
-  pure PartBuilder {..}
-  where
-    boundarypart :: Text -> PartBuilder -> Builder
-    boundarypart bdy PartBuilder {..} =
-      foldMap byteString ["--", encodeUtf8 bdy, "\n"]
-        <> foldMap buildHeaders headers
-        <> "\n"
-        <> bsbuilder
-        <> "\n"
+  pure PartBuilder{..}
+ where
+  boundarypart :: Text -> PartBuilder -> Builder
+  boundarypart bdy PartBuilder{..} =
+    foldMap byteString ["--", encodeUtf8 bdy, "\n"]
+      <> foldMap buildHeaders headers
+      <> "\n"
+      <> bsbuilder
+      <> "\n"
 
 -- | 'ToSinglePart' captures the data-specific method to attach itself to an email message.
 --
@@ -211,14 +211,14 @@ class ToSinglePart a where
 
 -- | Convert a value to a 'Part' with the default 'partDisposition' and 'partEncoding' for its type.
 toSinglePart :: forall a. (ToSinglePart a) => a -> Part 'One
-toSinglePart a = Part {..}
-  where
-    Const partContentType = contentTypeFor @a
-    Const partDisposition = dispositionFor @a
-    Const partEncoding = encodingFor @a
-    partLocation = Nothing
-    partHeaders = []
-    partContent = Single (makePartContent a)
+toSinglePart a = Part{..}
+ where
+  Const partContentType = contentTypeFor @a
+  Const partDisposition = dispositionFor @a
+  Const partEncoding = encodingFor @a
+  partLocation = Nothing
+  partHeaders = []
+  partContent = Single (makePartContent a)
 
 -- | Convert a file to a 'Part', with the specified file path, file name and media type.
 filePart :: (MonadIO m) => FilePath -> Text -> MediaType -> m (Part 'One)
@@ -229,7 +229,7 @@ filePart fp name media = do
       partLocation = Just name
       partHeaders = []
   partContent <- Single <$> readFileLBS fp
-  pure Part {..}
+  pure Part{..}
 
 -- | Add the image at the specified file path to an email message.
 imagePart :: (MonadIO m) => FilePath -> m (Part 'One)
@@ -242,7 +242,7 @@ imagePart fp = do
       partLocation = Just name
       partHeaders = []
   partContent <- Single <$> readFileLBS fp
-  pure Part {..}
+  pure Part{..}
 
 instance ToSinglePart Text where makePartContent = encodeUtf8
 

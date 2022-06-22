@@ -1,12 +1,11 @@
-module Codec.MIME.Disposition
-  ( Disposition (..),
-    disposition,
-    DispType (..),
-    disptype,
-    DispParam (..),
-    dispparam,
-  )
-where
+module Codec.MIME.Disposition (
+  Disposition (..),
+  disposition,
+  DispType (..),
+  disptype,
+  DispParam (..),
+  dispparam,
+) where
 
 import Codec.MIME.TextEncoding (rfc5987)
 import Data.Time.Compat (LocalTime)
@@ -14,14 +13,14 @@ import Data.Time.Format.ISO8601.Compat (iso8601Show)
 
 -- | The value of the "Content-Disposition" header along with associated parameters.
 data Disposition = Disposition
-  { dispType :: DispType,
-    dispParams :: [DispParam]
+  { dispType :: DispType
+  , dispParams :: [DispParam]
   }
   deriving (Eq)
 
 -- | Get the proper 'Text' value for a 'Disposition'.
 disposition :: Disposition -> Text
-disposition Disposition {..} = disptype dispType <> foldMap (("; " <>) . dispparam) dispParams
+disposition Disposition{..} = disptype dispType <> foldMap (("; " <>) . dispparam) dispParams
 
 -- | The disposition type for the content beneath the header. Typically "inline" or "attachment".
 data DispType

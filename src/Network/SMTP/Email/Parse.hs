@@ -2,23 +2,22 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
-module Network.SMTP.Email.Parse
-  ( Email,
-    Mailbox (..),
-    email,
-    mailbox,
-    mailboxes,
-    unsafeEmail,
-    domainPart,
-    emailByteString,
-    localPart,
-    validEmail,
-    validMailbox,
-    validateEmail,
-    validateMailbox,
-    validateMailboxes,
-  )
-where
+module Network.SMTP.Email.Parse (
+  Email,
+  Mailbox (..),
+  email,
+  mailbox,
+  mailboxes,
+  unsafeEmail,
+  domainPart,
+  emailByteString,
+  localPart,
+  validEmail,
+  validMailbox,
+  validateEmail,
+  validateMailbox,
+  validateMailboxes,
+) where
 
 import Control.Arrow ((+++))
 import Data.Text qualified as T
@@ -30,8 +29,8 @@ import Text.Parsec.Text (Parser)
 import Prelude hiding (group, (<|>))
 
 data Mailbox = Mailbox
-  { mailboxName :: Maybe Text,
-    mailboxEmail :: Email
+  { mailboxName :: Maybe Text
+  , mailboxEmail :: Email
   }
 
 -- |
@@ -47,16 +46,16 @@ unsafeEmail = Email
 email :: QuasiQuoter
 email =
   QuasiQuoter
-    { quoteExp = qemail emailexp,
-      quotePat = error "email is not supported as a pattern",
-      quoteDec = error "email is not supported at top-level",
-      quoteType = error "email is not supported as a type"
+    { quoteExp = qemail emailexp
+    , quotePat = error "email is not supported as a pattern"
+    , quoteDec = error "email is not supported at top-level"
+    , quoteType = error "email is not supported as a type"
     }
-  where
-    qemail p s =
-      case validateEmail $ toText s of
-        Left err -> error $ "Invalid quasi-quoted email address: " <> toText err
-        Right e -> p e
+ where
+  qemail p s =
+    case validateEmail $ toText s of
+      Left err -> error $ "Invalid quasi-quoted email address: " <> toText err
+      Right e -> p e
 
 emailexp :: Email -> ExpQ
 emailexp e =
@@ -67,33 +66,33 @@ emailexp e =
 mailbox :: QuasiQuoter
 mailbox =
   QuasiQuoter
-    { quoteExp = qmailbox mailboxexp,
-      quotePat = error "mailbox is not supported as a pattern",
-      quoteDec = error "mailbox is not supported at top-level",
-      quoteType = error "mailbox is not supported as a type"
+    { quoteExp = qmailbox mailboxexp
+    , quotePat = error "mailbox is not supported as a pattern"
+    , quoteDec = error "mailbox is not supported at top-level"
+    , quoteType = error "mailbox is not supported as a type"
     }
-  where
-    qmailbox p s =
-      case validateMailbox $ toText s of
-        Left err -> error $ "Invalid quasi-quoted mailbox: " <> toText err
-        Right e -> p e
+ where
+  qmailbox p s =
+    case validateMailbox $ toText s of
+      Left err -> error $ "Invalid quasi-quoted mailbox: " <> toText err
+      Right e -> p e
 
 mailboxexp :: Mailbox -> ExpQ
-mailboxexp Mailbox {..} = [|Mailbox mailboxName $(emailexp mailboxEmail)|]
+mailboxexp Mailbox{..} = [|Mailbox mailboxName $(emailexp mailboxEmail)|]
 
 mailboxes :: QuasiQuoter
 mailboxes =
   QuasiQuoter
-    { quoteExp = qmailbox (listE . map mailboxexp . toList),
-      quotePat = error "mailboxes is not supported as a pattern",
-      quoteDec = error "mailboxes is not supported at top-level",
-      quoteType = error "mailboxes is not supported as a type"
+    { quoteExp = qmailbox (listE . map mailboxexp . toList)
+    , quotePat = error "mailboxes is not supported as a pattern"
+    , quoteDec = error "mailboxes is not supported at top-level"
+    , quoteType = error "mailboxes is not supported as a type"
     }
-  where
-    qmailbox p s =
-      case validateMailboxes $ toText s of
-        Left err -> error $ "Invalid quasi-quoted mailbox list: " <> toText err
-        Right e -> p e
+ where
+  qmailbox p s =
+    case validateMailboxes $ toText s of
+      Left err -> error $ "Invalid quasi-quoted mailbox list: " <> toText err
+      Right e -> p e
 
 emailByteString :: Email -> ByteString
 emailByteString (Email l d) = encodeUtf8 l <> "@" <> encodeUtf8 d
