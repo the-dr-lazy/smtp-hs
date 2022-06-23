@@ -2,11 +2,11 @@ module Codec.MIME.Boundary (
   Boundary (..),
 ) where
 
-import Control.Monad.Random
+import Control.Monad.Random (Random)
 import Relude.Extra (prev)
-import System.Random.Stateful
+import System.Random.Stateful (Uniform (uniformM), UniformRange (uniformRM))
 
--- | Get a list of results by repeatedly applying a monadic action to an initial value.
+-- | Get a list of results by iterating a monadic action.
 applyNM :: (Monad m) => Int -> a -> (a -> m b) -> m [b] -> m [b]
 applyNM 0 _ _ mbs = mbs
 applyNM n a f mbs = do

@@ -32,13 +32,13 @@ instance Monoid QP where mempty = QP Empty
 
 -- | Encode a lazy 'ByteString' as quoted-printable.
 toQP :: Bool -> B8L.ByteString -> QP
-toQP text = B8L.foldl' (\acc c -> acc <> qp c) mempty
+toQP isText = B8L.foldl' (\acc c -> acc <> qp c) mempty
  where
   qp :: Char -> QP
   qp = \case
     '\t' -> quip Tab
-    '\n' -> quip $ if text then Newline else Escape (char8 '\n')
-    '\r' -> if text then QP Empty else quip $ Escape (char8 '\r')
+    '\n' -> quip $ if isText then Newline else Escape (char8 '\n')
+    '\r' -> if isText then QP Empty else quip $ Escape (char8 '\r')
     ' ' -> quip Space
     c ->
       quip $

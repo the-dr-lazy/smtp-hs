@@ -7,11 +7,11 @@ import Data.ByteString.Char8 qualified as B8
 import Data.Char (isDigit)
 import Network.BSD (getHostName)
 import Network.Connection
-import Network.SMTP.Auth as SMTP
-import Network.SMTP.Command as SMTP
-import Network.SMTP.Response as SMTP
-import Network.Socket
-import Relude.Extra
+import Network.SMTP.Auth as Network.SMTP (AuthType (..), auth, encodeLogin)
+import Network.SMTP.Command as Network.SMTP (Command (..))
+import Network.SMTP.Response as Network.SMTP (ReplyCode)
+import Network.Socket (HostName, PortNumber)
+import Relude.Extra (prev)
 import Relude.Unsafe (read)
 
 defaulttls :: TLSSettings
@@ -32,12 +32,16 @@ replyCode = fst <$> response
 cputLine :: (MonadReader Connection m, MonadIO m) => ByteString -> m ()
 cputLine bs = liftIO . (`connectionPut` (bs <> "\r\n")) =<< ask
 
-sendCommand :: (MonadReader Connection m, MonadIO m) => Command -> m (ReplyCode, ByteString)
+sendCommand ::
+  (MonadReader Connection m, MonadIO m) =>
+  Command ->
+  m (ReplyCode, ByteString)
 sendCommand = \case
   DATA bs -> do
     cputLine "DATA"
     code <- replyCode
-    unless (code == 354) (liftIO $ fail "This server is not configured to receive data.")
+    unless (code == 354) . liftIO $
+      fail "This server is not configured to receive data."
     traverse_ (cputLine . padDot . stripCR) $ BS.split lf bs
     cputLine "."
     response
@@ -80,21 +84,32 @@ closeSMTP = do
   void $ sendCommand QUIT
   liftIO . connectionClose =<< ask
 
-command :: (MonadReader Connection m, MonadIO m) => Int -> Command -> ReplyCode -> m (Maybe ByteString)
-command 0 _ _ = pure Nothing
+command ::
+  (MonadReader Connection m, MonadIO m) =>
+  Int ->
+  Command ->
+  ReplyCode ->
+  m (Maybe ByteString)
+command times _ _ | times <= 0 = pure Nothing
 command times cmd expect = do
   (code, msg) <- sendCommand cmd
   if code == expect
     then pure $ Just msg
     else command (prev times) cmd expect
 
-commandOrQuit :: (MonadReader Connection m, MonadIO m) => Int -> Command -> ReplyCode -> m ByteString
+commandOrQuit ::
+  (MonadReader Connection m, MonadIO m) =>
+  Int ->
+  Command ->
+  ReplyCode ->
+  m ByteString
 commandOrQuit 1 cmd expect = do
   (code, msg) <- sendCommand cmd
   if code == expect
     then pure msg
-    else
-      (closeSMTP >>) . liftIO . fail $
+    else do
+      closeSMTP
+      liftIO . fail $
         "Unexpected reply to \""
           <> show cmd
           <> "\": Expected "
@@ -110,7 +125,10 @@ commandOrQuit times cmd expect = do
     then pure msg
     else commandOrQuit (prev times) cmd expect
 
-smtpconnect :: (MonadReader Connection m, MonadIO m) => IO HostName -> m [ByteString]
+smtpconnect ::
+  (MonadReader Connection m, MonadIO m) =>
+  IO HostName ->
+  m [ByteString]
 smtpconnect gethostname = do
   code <- replyCode
   unless (code == 220) $ do
@@ -124,7 +142,12 @@ smtpconnect gethostname = do
       mhelo <- command 3 (HELO $ encodeUtf8 sender) 250
       pure $ maybe [] (drop 1 . B8.lines) mhelo
 
-smtpconnectSTARTTLS :: (MonadReader Connection m, MonadIO m) => IO HostName -> ConnectionContext -> TLSSettings -> m [ByteString]
+smtpconnectSTARTTLS ::
+  (MonadReader Connection m, MonadIO m) =>
+  IO HostName ->
+  ConnectionContext ->
+  TLSSettings ->
+  m [ByteString]
 smtpconnectSTARTTLS gethostname context tls = do
   code <- replyCode
   unless (code == 220) $ do
@@ -143,8 +166,13 @@ connectSMTP' ::
   Maybe (IO HostName) ->
   Maybe TLSSettings ->
   m (Connection, [ByteString])
-connectSMTP' hostname ((?: 25) -> port) ((?: getHostName) -> gethostname) mtls = do
-  connection <- liftIO $ initConnectionContext >>= (`connectTo` ConnectionParams hostname port mtls Nothing)
+connectSMTP' hostname mport mgethost mtls = do
+  let port = mport ?: 25
+      gethostname = mgethost ?: getHostName
+  connection <-
+    liftIO $
+      initConnectionContext
+        >>= (`connectTo` ConnectionParams hostname port mtls Nothing)
   (connection,) <$> usingReaderT connection (smtpconnect gethostname)
 
 connectSMTPSTARTTLS' ::
@@ -154,16 +182,27 @@ connectSMTPSTARTTLS' ::
   Maybe (IO HostName) ->
   Maybe TLSSettings ->
   m (Connection, [ByteString])
-connectSMTPSTARTTLS' hostname ((?: 25) -> port) ((?: getHostName) -> gethostname) mtls = do
+connectSMTPSTARTTLS' hostname mport mgethost mtls = do
+  let port = mport ?: 25
+      gethostname = mgethost ?: getHostName
   context <- liftIO initConnectionContext
-  connection <- liftIO $ connectTo context (ConnectionParams hostname port Nothing Nothing)
-  (connection,) <$> usingReaderT connection (smtpconnectSTARTTLS gethostname context (mtls ?: defaulttls))
+  connection <-
+    liftIO . connectTo context $
+      ConnectionParams hostname port Nothing Nothing
+  fmap (connection,) . usingReaderT connection $
+    smtpconnectSTARTTLS gethostname context (mtls ?: defaulttls)
 
 connectSMTP :: (MonadIO m) => HostName -> m (Connection, [ByteString])
 connectSMTP hostname = connectSMTP' hostname Nothing Nothing Nothing
 
 connectSMTPS :: (MonadIO m) => HostName -> m (Connection, [ByteString])
-connectSMTPS hostname = connectSMTP' hostname (Just 465) Nothing (Just defaulttls)
+connectSMTPS hostname =
+  connectSMTP' hostname (Just 465) Nothing (Just defaulttls)
 
 connectSMTPSTARTTLS :: (MonadIO m) => HostName -> m (Connection, [ByteString])
-connectSMTPSTARTTLS hostname = connectSMTPSTARTTLS' hostname (Just 587) Nothing Nothing
+connectSMTPSTARTTLS hostname =
+  connectSMTPSTARTTLS'
+    hostname
+    (Just 587)
+    Nothing
+    Nothing

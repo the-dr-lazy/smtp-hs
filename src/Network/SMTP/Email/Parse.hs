@@ -23,7 +23,21 @@ import Control.Arrow ((+++))
 import Data.Text qualified as T
 import Language.Haskell.TH (ExpQ, listE)
 import Language.Haskell.TH.Quote (QuasiQuoter (..))
-import Text.Parsec (ParsecT, Stream, char, crlf, endBy1, eof, many1, oneOf, parse, sepEndBy1, string, tab, (<?>))
+import Text.Parsec (
+  ParsecT,
+  Stream,
+  char,
+  crlf,
+  endBy1,
+  eof,
+  many1,
+  oneOf,
+  parse,
+  sepEndBy1,
+  string,
+  tab,
+  (<?>),
+ )
 import Text.Parsec qualified as TP
 import Text.Parsec.Text (Parser)
 import Prelude hiding (group, (<|>))
@@ -178,7 +192,12 @@ ccontent :: Parser Text
 ccontent = fmap one ctext <|> quotedpair <|> comment
 
 comment :: Parser Text
-comment = fmap unwords $ char '(' *> many (optional fws *> ccontent) <* fws <* char ')'
+comment =
+  fmap unwords $
+    char '('
+      *> many (optional fws *> ccontent)
+      <* fws
+      <* char ')'
 
 cfws :: Parser ()
 cfws = void (many1 (optional fws *> comment) <* fws) <|> fws
@@ -206,7 +225,16 @@ qcontent :: Parser Text
 qcontent = fmap one qtext <|> quotedpair
 
 quotedstring :: Parser Text
-quotedstring = optional cfws *> fmap fold (sequence [one <$> char '"', fold <$> many (optional fws *> qcontent), fmap one $ optional fws *> char '"']) <* optional cfws
+quotedstring =
+  optional cfws
+    *> ( fold
+          <$> sequence
+            [ one <$> char '"'
+            , fold <$> many (optional fws *> qcontent)
+            , fmap one $ optional fws *> char '"'
+            ]
+       )
+    <* optional cfws
 
 -- 3.2.5
 
@@ -231,19 +259,32 @@ nameAddr :: Parser Mailbox
 nameAddr = Mailbox <$> (T.unwords <<$>> optional phrase) <*> angleAddr
 
 angleAddr :: Parser Email
-angleAddr = optional cfws *> char '<' *> addrSpec <* char '>' <* optional cfws <|> obsAngleAddr
+angleAddr =
+  ( optional cfws
+      *> char '<'
+      *> addrSpec
+      <* char '>'
+      <* optional cfws
+  )
+    <|> obsAngleAddr
 
 group :: Parser [Mailbox]
-group = displayName *> char ':' *> (fromMaybe [] <$> optional groupList) <* char ';' <* optional cfws
+group =
+  displayName
+    *> char ':'
+    *> (optional groupList <&> (?: []))
+    <* char ';'
+    <* optional cfws
 
 displayName :: Parser [Text]
 displayName = phrase
 
 mailboxList :: Parser (NonEmpty Mailbox)
-mailboxList = (:|) <$> mailbox' <*> many (char ',' *> mailbox') <|> obsMboxList
+mailboxList = liftA2 (:|) mailbox' (many (char ',' *> mailbox')) <|> obsMboxList
 
 addressList :: Parser [Mailbox]
-addressList = ((fold .) . (:) <$> addresses <*> many (char ',' *> addresses)) <|> obsAddrList
+addressList =
+  (fold <$> liftA2 (:) addresses (many (char ',' *> addresses))) <|> obsAddrList
 
 groupList :: Parser [Mailbox]
 groupList = fmap toList mailboxList <|> fmap (const []) (cfws <|> obsGroupList)
@@ -255,13 +296,15 @@ addrSpec = do
   l <- localpart
 
   -- Maximum length of local-part is 64, per RFC3696
-  when (T.length l > 64) (fail "local-part of email is too long (more than 64 octets)")
+  when (T.length l > 64) $
+    fail "local-part of email is too long (more than 64 octets)"
 
   void (char '@') <?> "at sign"
   d <- domain
 
   -- Maximum length is 254, per Erratum 1690 on RFC3696
-  when (T.length l + T.length d > 253) (fail "email address is too long (more than 254 octets)")
+  when (T.length l + T.length d > 253) $
+    fail "email address is too long (more than 254 octets)"
 
   pure $ Email l d
 
@@ -279,13 +322,22 @@ domainname = do
 
 domainlabel :: Parser Text
 domainlabel = do
-  content <- optional cfws *> ((:|) <$> alphaNum <*> many (alphaNum <|> char '-')) <* optional cfws
+  content <-
+    optional cfws
+      *> liftA2 (:|) alphaNum (many (alphaNum <|> char '-'))
+      <* optional cfws
 
   length content <= 63 && last content /= '-' ?> toText (toList content)
 
 domainliteral :: Parser Text
 domainliteral =
-  fmap fold $ optional cfws *> char '[' *> many (optional fws *> dtext) <* optional fws <* char ']' <* optional cfws
+  fmap fold $
+    optional cfws
+      *> char '['
+      *> many (optional fws *> dtext)
+      <* optional fws
+      <* char ']'
+      <* optional cfws
 
 dtext :: Parser Text
 dtext = fmap one (ranges [[33 .. 90], [94 .. 126]]) <|> obsDtext
@@ -309,7 +361,10 @@ obsQP :: Parser Text
 obsQP = T.cons <$> char '\\' <*> fmap one (choice [nul, obsNoWsCtl, lf, cr])
 
 obsUnstruct :: Parser Text
-obsUnstruct = fold <$> many ((many lf *> many cr *> tmany (obsUtext <* many lf <* many cr)) <|> ("" <$ fws))
+obsUnstruct =
+  fold <<$>> many $
+    (many lf *> many cr *> tmany (obsUtext <* many lf <* many cr))
+      <|> ("" <$ fws)
 
 -- 4.2
 
@@ -319,7 +374,12 @@ obsFws = void $ many1 wsp *> many (crlf *> many1 wsp)
 -- 4.4
 
 obsAngleAddr :: Parser Email
-obsAngleAddr = optional cfws *> char '<' *> (obsRoute {- should be ignored -} *> addrSpec) <* char '>' <* optional cfws
+obsAngleAddr =
+  optional cfws
+    *> char '<'
+    *> (obsRoute {- should be ignored -} *> addrSpec)
+    <* char '>'
+    <* optional cfws
 
 obsRoute :: Parser [Text]
 obsRoute = obsDomainList <* char ':'

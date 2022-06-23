@@ -28,7 +28,12 @@ import Text.Blaze.Html (Html)
 
 buildMailbox :: Mailbox -> Builder
 buildMailbox Mailbox{..} =
-  fold [maybe mempty ((<> " ") . encodeEscapedUtf8) mailboxName, "<", byteString $ emailByteString mailboxEmail, ">"]
+  fold
+    [ maybe mempty ((<> " ") . encodeEscapedUtf8) mailboxName
+    , "<"
+    , byteString $ emailByteString mailboxEmail
+    , ">"
+    ]
 
 -- |
 -- > message :: Mail
@@ -70,7 +75,10 @@ data MailRenderError
   | UnspecifiedContent
   deriving (Eq, Show)
 
-renderMail :: (MonadRandom m) => Mail -> m (Either MailRenderError BSL.ByteString)
+renderMail ::
+  (MonadRandom m) =>
+  Mail ->
+  m (Either MailRenderError BSL.ByteString)
 renderMail m@Mail{..} =
   if null mailTo
     then pure $ Left UnspecifiedTarget

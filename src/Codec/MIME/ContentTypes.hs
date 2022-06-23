@@ -39,7 +39,12 @@ parseContentType = parse contentTypeP ""
 contentTypeP :: Parser ContentType
 contentTypeP = do
   mediaType <- mediaTypeP <* optional (char ';')
-  contentParams <- (on (,) toText <$> manyTill accepted (char '=') <*> many accepted) `sepBy` char ';'
+  contentParams <-
+    ( on (,) toText
+        <$> manyTill accepted (char '=')
+        <*> many accepted
+      )
+      `sepBy` char ';'
   pure ContentType{..}
  where
   accepted = try alphaNum <|> oneOf "-_.'"
@@ -94,23 +99,39 @@ mediaTypeP =
     ]
  where
   applicationP =
-    Application . map toText <$ string "application/" <*> (many accepted `sepBy` try (char '+'))
+    Application . map toText
+      <$ string "application/"
+      <*> (many accepted `sepBy` try (char '+'))
   audioP =
-    Audio . map toText <$ string "audio/" <*> (many accepted `sepBy` try (char '+'))
+    Audio . map toText
+      <$ string "audio/"
+      <*> (many accepted `sepBy` try (char '+'))
   fontP =
-    Font . map toText <$ string "font/" <*> (many accepted `sepBy` try (char '+'))
+    Font . map toText
+      <$ string "font/"
+      <*> (many accepted `sepBy` try (char '+'))
   imageP =
-    Image . map toText <$ string "image/" <*> (many accepted `sepBy` try (char '+'))
+    Image . map toText
+      <$ string "image/"
+      <*> (many accepted `sepBy` try (char '+'))
   messageP =
-    Message . map toText <$ string "message/" <*> (many accepted `sepBy` try (char '+'))
+    Message . map toText
+      <$ string "message/"
+      <*> (many accepted `sepBy` try (char '+'))
   modelP =
-    Model . map toText <$ string "model/" <*> (many accepted `sepBy` try (char '+'))
+    Model . map toText
+      <$ string "model/"
+      <*> (many accepted `sepBy` try (char '+'))
   multipartP' =
     Multipart <$> (string "multipart/" *> multipartP)
   textP =
-    Text . map toText <$ string "text/" <*> (many accepted `sepBy` try (char '+'))
+    Text . map toText
+      <$ string "text/"
+      <*> (many accepted `sepBy` try (char '+'))
   videoP =
-    Video . map toText <$ string "video/" <*> (many accepted `sepBy` try (char '+'))
+    Video . map toText
+      <$ string "video/"
+      <*> (many accepted `sepBy` try (char '+'))
 
   accepted = try alphaNum <|> oneOf "-_.'"
 

@@ -40,16 +40,22 @@ instance Show Password where
 
 ascii :: Text -> ByteString
 ascii t = case T.partition isAscii t of
-  (yes, no) -> if T.null no then encodeUtf8 yes else error $ "expected ASCII but got: " <> no
+  (yes, no)
+    | T.null no -> encodeUtf8 yes
+    | otherwise -> error $ "expected ASCII but got: " <> no
 
 encodeLogin :: Username -> Password -> (ByteString, ByteString)
-encodeLogin (Username u) (Password p) = (B64.encode $ ascii u, B64.encode $ ascii p)
+encodeLogin (Username u) (Password p) =
+  (B64.encode $ ascii u, B64.encode $ ascii p)
 
 auth :: AuthType -> Text -> Username -> Password -> ByteString
 auth at c user@(Username u) pw@(Password p) = case at of
   PLAIN -> B64.encode . ascii $ T.intercalate "\0" [u, u, p]
-  LOGIN -> let (u', p') = encodeLogin user pw in B8.unwords [u', p']
-  CRAM_MD5 -> B64.encode $ B8.unwords [ascii u, B16.encode $ hmacMD5 (ascii c) (ascii p)]
+  LOGIN ->
+    let (u', p') = encodeLogin user pw
+     in B8.unwords [u', p']
+  CRAM_MD5 ->
+    B64.encode $ B8.unwords [ascii u, B16.encode $ hmacMD5 (ascii c) (ascii p)]
  where
   hmacMD5 :: ByteString -> ByteString -> ByteString
-  hmacMD5 chlg pwd = copyAndFreeze (hmac pwd chlg :: HMAC MD5) (const $ pure ())
+  hmacMD5 chlg pwd = copyAndFreeze (hmac pwd chlg :: HMAC MD5) (const pass)

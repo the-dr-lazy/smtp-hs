@@ -4,14 +4,16 @@ module Codec.MIME.ContentTransferEncoding (
 ) where
 
 -- |
--- The value of the "Content-Transfer-Encoding" header, can be "base64" or "quoted-printable".
+-- The value of the "Content-Transfer-Encoding" header,
+-- can be "base64" or "quoted-printable".
 -- If you need more encodings, please open a PR!
 --
 -- The 'Bool' associated to @QuotedPrintable@ specifies whether to encode
 -- the content as text (@True@) or raw bytes (@False@).
 data ContentTransferEncoding
   = Base64
-  | QuotedPrintable Bool -- true/text, false/binary
+  | QuotedPrintableText
+  | QuotedPrintableBinary
   deriving (Eq, Show)
 
 -- | Get the proper 'Text' value for a 'ContentTransferEncoding'.

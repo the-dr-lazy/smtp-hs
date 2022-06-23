@@ -32,7 +32,9 @@ data SMTPSettings = SMTPSettings
 class (MonadRandom m, MonadIO m) => MonadSMTP m where
   smtpSettings :: m SMTPSettings
 
-  -- | Login to the SMTP server using the 'SMTPSettings', then render and send the email.
+  -- |
+  -- Login to the SMTP server using the 'SMTPSettings',
+  -- then render and send the email.
   sendMail :: Mail -> m ()
   sendMail m@Mail{..} = do
     SMTPSettings{..} <- smtpSettings
@@ -43,9 +45,10 @@ class (MonadRandom m, MonadIO m) => MonadSMTP m where
     (connection, _response) <- connect hostname port Nothing tlsSettings
     usingReaderT connection $ do
       let credentials = liftM2 (,) username password
-      whenJust credentials $ \(u, p) -> void $ commandOrQuit 1 (AUTH LOGIN u p) 235
-      let from = emailByteString $ mailboxEmail mailFrom
-          tos = map (emailByteString . mailboxEmail) $ mailTo <> mailCc <> mailBcc
+      whenJust credentials $ \(u, p) ->
+        void $ commandOrQuit 1 (AUTH LOGIN u p) 235
+      let from = emailByteString (mailboxEmail mailFrom)
+          tos = emailByteString . mailboxEmail <$> mailTo <> mailCc <> mailBcc
       mrendered <- renderMail m
       case mrendered of
         Left er -> liftIO . fail $ show er

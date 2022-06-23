@@ -30,7 +30,6 @@ import Codec.MIME.ContentTypes as MIME
 import Codec.MIME.Disposition as MIME
 import Codec.MIME.QuotedPrintable as MIME
 import Codec.MIME.TextEncoding as MIME
-import Control.Monad (liftM3)
 import Control.Monad.Random (MonadRandom (getRandom))
 import Data.ByteString.Base64.Lazy qualified as B64L
 import Data.ByteString.Builder (Builder, byteString, lazyByteString)
@@ -38,7 +37,7 @@ import Data.ByteString.Lazy qualified as BSL
 import Data.Char (isAscii)
 import Data.Text qualified as T
 import System.FilePath (takeBaseName, takeExtension)
-import Text.Blaze.Html
+import Text.Blaze.Html (Html)
 import Text.Blaze.Html.Renderer.Utf8 (renderHtml)
 import Yesod.Content.PDF (PDF (pdfBytes))
 
@@ -46,12 +45,13 @@ import Yesod.Content.PDF (PDF (pdfBytes))
 data Mult = One | Many
 
 -- |
--- A 'Part' is an abstract representation of a part of an email; it could represent
--- an attachment, a message body, or even contain several, related sub-parts, such as
--- different translations of the same content.
+-- A 'Part' is an abstract representation of a part of an email;
+-- it could represent an attachment, a message body, or even contain several,
+-- related sub-parts, such as different translations of the same content.
 --
--- Aside from its content, a 'Part' has a 'ContentType', possibly a 'Disposition',
--- possibly a 'ContentTransferEncoding', possibly a "partLocation" (or URI) where it
+-- Aside from its content, a 'Part' has a 'ContentType',
+-- possibly a 'Disposition', possibly a 'ContentTransferEncoding',
+-- possibly a "partLocation" (or URI) where it
 -- can be found, and perhaps additional headers.
 data Part mult = Part
   { partContentType :: ContentType
@@ -80,18 +80,29 @@ data PartBuilder = PartBuilder
 -- | Connect multiple standalone 'Part's into a @multipart/related@ 'Part'.
 related :: NonEmpty (Part 'One) -> Part 'Many
 related parts =
-  Part (ContentType MultipartRelated []) Nothing Nothing Nothing [] (Multiple parts)
+  Part
+    (ContentType MultipartRelated [])
+    Nothing
+    Nothing
+    Nothing
+    []
+    (Multiple parts)
 
 encodeEscapedUtf8 :: Text -> Builder
 encodeEscapedUtf8 t = fold ["=?utf-8?Q?", byteString $ rfc2822 t, "?="]
 
--- | Sanitize the header name and value before preparing for 'ByteString' conversion.
+-- |
+-- Sanitize the header name and value before
+-- preparing for 'ByteString' conversion.
 buildHeaders :: (Text, Text) -> Builder
 buildHeaders (hname, hval) =
   fold
-    [ byteString . encodeUtf8 $ T.filter (\w -> w /= ':' && '!' <= w && w <= '~') hname
+    [ byteString . encodeUtf8 $
+        T.filter (\w -> w /= ':' && '!' <= w && w <= '~') hname
     , ": "
-    , if T.all isAscii hval then byteString $ encodeUtf8 hval else encodeEscapedUtf8 hval
+    , if T.all isAscii hval
+        then byteString $ encodeUtf8 hval
+        else encodeEscapedUtf8 hval
     , "\n"
     ]
 
@@ -99,35 +110,58 @@ buildHeaders (hname, hval) =
 singleBuilder :: Part 'One -> PartBuilder
 singleBuilder Part{partContent = Single bs, ..} = PartBuilder{..}
  where
+  encodingHeader = case partEncoding of
+    Nothing -> id
+    Just e -> (("Content-Transfer-Encoding", contenttransferencoding e) :)
+  dispositionHeader = case partDisposition of
+    Nothing -> id
+    Just d -> (("Content-Disposition", disposition d) :)
+  locationHeader = case partLocation of
+    Nothing -> id
+    Just loc -> (("Content-Location", loc) :)
   headers =
     (("Content-Type", contenttype partContentType) :)
-      . maybe id (\e -> (("Content-Transfer-Encoding", contenttransferencoding e) :)) partEncoding
-      . maybe id (\d -> (("Content-Disposition", disposition d) :)) partDisposition
-      . maybe id (\loc -> (("Content-Location", loc) :)) partLocation
+      . encodingHeader
+      . dispositionHeader
+      . locationHeader
       $ partHeaders
   bsbuilder = case partEncoding of
     Just Base64 ->
       foldMap' ((<> "\r\n") . lazyByteString . B64L.encode) $
-        unfoldr (liftM3 bool (const Nothing) (Just . BSL.splitAt 57) BSL.null) bs
-    Just (QuotedPrintable txt) -> qpBuilder $ toQP txt bs
+        unfoldr (BSL.splitAt 57 <<$>> guarded BSL.null) bs
+    Just QuotedPrintableText -> qpBuilder $ toQP True bs
+    Just QuotedPrintableBinary -> qpBuilder $ toQP False bs
     Nothing -> lazyByteString bs
 
--- | Prepare a nested 'Part' for 'ByteString' conversion. A 'Boundary' delineator is required.
+-- |
+-- Prepare a nested 'Part' for 'ByteString' conversion.
+-- A 'Boundary' delineator is required.
 multipleBuilder :: Boundary -> Part 'Many -> PartBuilder
 multipleBuilder (Boundary bdy) Part{partContent = Multiple ps} = PartBuilder{..}
  where
-  headers = [("Content-Type", contenttype $ ContentType (Multipart Related) [("boundary", bdy)])]
-  bsbuilder = foldMap (boundarypart bdy) ps <> "--" <> byteString (encodeUtf8 bdy) <> "--"
+  headers =
+    [
+      ( "Content-Type"
+      , contenttype $
+          ContentType
+            (Multipart Related)
+            [("boundary", bdy)]
+      )
+    ]
+  bsbuilder =
+    foldMap' (boundarypart bdy) ps <> "--" <> byteString (encodeUtf8 bdy) <> "--"
 
   boundarypart :: Text -> Part 'One -> Builder
   boundarypart bd Part{partContent = Single bs, partHeaders} =
-    foldMap byteString ["--", encodeUtf8 bd, "\n"]
-      <> foldMap buildHeaders partHeaders
+    foldMap' byteString ["--", encodeUtf8 bd, "\n"]
+      <> foldMap' buildHeaders partHeaders
       <> "\n"
       <> lazyByteString bs
       <> "\n"
 
--- | Delay the handling of the multiplicity of a part for the purposes of 'partEncoding' the entire message.
+-- |
+-- Delay the handling of the multiplicity of a part for the purposes
+-- of 'partEncoding' the entire message.
 data SomePart
   = SPOne (Part 'One)
   | SPMany (Part 'Many)
@@ -149,51 +183,79 @@ somePart :: Part mult -> SomePart
 somePart p@Part{partContent = Single _} = SPOne p
 somePart p@Part{partContent = Multiple _} = SPMany p
 
--- | Build a message from a collection of parts of arbitrary multiplicity.
+-- |
+-- Build a message from a collection of parts of arbitrary multiplicity.
 --
--- The 'Multipart' value is ignored in the case of a standalone 'Part', but describes
--- the MIME type in the nested case. A good default is 'Related'.
-partBuilder :: (MonadRandom m) => Multipart -> NonEmpty SomePart -> m PartBuilder
+-- The 'Multipart' value is ignored in the case of a standalone 'Part',
+-- but describes the MIME type in the nested case. A good default is 'Related'.
+partBuilder ::
+  (MonadRandom m) =>
+  Multipart ->
+  NonEmpty SomePart ->
+  m PartBuilder
 partBuilder _ (a :| []) = case a of
   SPOne p -> pure $ singleBuilder p
   SPMany p -> (`multipleBuilder` p) <$> getRandom
 partBuilder m arbs = do
   pbs <- forM arbs $ partBuilder m . pure
   Boundary bdy <- getRandom
-  let headers = [("Content-Type", contenttype $ ContentType (Multipart m) [("boundary", bdy)])]
-      bsbuilder = foldMap (boundarypart bdy) pbs <> "--" <> byteString (encodeUtf8 bdy) <> "--"
+  let headers =
+        [
+          ( "Content-Type"
+          , contenttype $ ContentType (Multipart m) [("boundary", bdy)]
+          )
+        ]
+      bsbuilder =
+        foldMap' (boundarypart bdy) pbs
+          <> "--"
+          <> byteString (encodeUtf8 bdy)
+          <> "--"
   pure PartBuilder{..}
  where
   boundarypart :: Text -> PartBuilder -> Builder
   boundarypart bdy PartBuilder{..} =
-    foldMap byteString ["--", encodeUtf8 bdy, "\n"]
-      <> foldMap buildHeaders headers
+    foldMap' byteString ["--", encodeUtf8 bdy, "\n"]
+      <> foldMap' buildHeaders headers
       <> "\n"
       <> bsbuilder
       <> "\n"
 
--- | Create a 'PartBuilder' for the entire message given the 'PartBuilder's for each of its parts.
--- The result will have a MIME type of @multipart/mixed@.
+-- |
+-- Create a 'PartBuilder' for the entire message given the 'PartBuilder's
+-- for each of its parts. The result will have a MIME type of @multipart/mixed@.
 mixedParts :: (MonadRandom m) => NonEmpty PartBuilder -> m PartBuilder
 mixedParts ps = do
   Boundary bdy <- getRandom
-  let headers = [("Content-Type", contenttype $ ContentType (Multipart Mixed) [("boundary", bdy)])]
-      bsbuilder = foldMap (boundarypart bdy) ps <> "--" <> byteString (encodeUtf8 bdy) <> "--"
+  let headers =
+        [
+          ( "Content-Type"
+          , contenttype $
+              ContentType (Multipart Mixed) [("boundary", bdy)]
+          )
+        ]
+      bsbuilder =
+        foldMap' (boundarypart bdy) ps
+          <> "--"
+          <> byteString (encodeUtf8 bdy)
+          <> "--"
   pure PartBuilder{..}
  where
   boundarypart :: Text -> PartBuilder -> Builder
   boundarypart bdy PartBuilder{..} =
-    foldMap byteString ["--", encodeUtf8 bdy, "\n"]
-      <> foldMap buildHeaders headers
+    foldMap' byteString ["--", encodeUtf8 bdy, "\n"]
+      <> foldMap' buildHeaders headers
       <> "\n"
       <> bsbuilder
       <> "\n"
 
--- | 'ToSinglePart' captures the data-specific method to attach itself to an email message.
+-- |
+-- 'ToSinglePart' captures the data-specific method to attach itself
+-- to an email message.
 --
--- For example, @Html@ values are encoded as @quoted-printable@ text, whereas a 'Text' value
--- is simply converted to UTF-8. Files may have their own appropriate MIME types, so be sure
--- to declare this instance for its representation if you plan to send it via email.
+-- For example, @Html@ values are encoded as @quoted-printable@ text,
+-- whereas a 'Text' value is simply converted to UTF-8. Files may have
+-- their own appropriate MIME types, so be sure to declare this instance
+-- for its representation if you plan to send it via email.
 class ToSinglePart a where
   contentTypeFor :: Const ContentType a
   default contentTypeFor :: (ToText a) => Const ContentType a
@@ -205,11 +267,13 @@ class ToSinglePart a where
 
   encodingFor :: Const (Maybe ContentTransferEncoding) a
   default encodingFor :: (ToText a) => Const (Maybe ContentTransferEncoding) a
-  encodingFor = Const (Just (QuotedPrintable True))
+  encodingFor = Const (Just QuotedPrintableText)
 
   makePartContent :: a -> BSL.ByteString
 
--- | Convert a value to a 'Part' with the default 'partDisposition' and 'partEncoding' for its type.
+-- |
+-- Convert a value to a 'Part' with the default
+-- 'partDisposition' and 'partEncoding' for its type.
 toSinglePart :: forall a. (ToSinglePart a) => a -> Part 'One
 toSinglePart a = Part{..}
  where
@@ -220,7 +284,9 @@ toSinglePart a = Part{..}
   partHeaders = []
   partContent = Single (makePartContent a)
 
--- | Convert a file to a 'Part', with the specified file path, file name and media type.
+-- |
+-- Convert a file to a 'Part', with the specified file path,
+-- file name and media type.
 filePart :: (MonadIO m) => FilePath -> Text -> MediaType -> m (Part 'One)
 filePart fp name media = do
   let partContentType = ContentType media [("charset", "utf-8")]
@@ -249,7 +315,7 @@ instance ToSinglePart Text where makePartContent = encodeUtf8
 instance ToSinglePart Html where
   contentTypeFor = Const (ContentType TextHtml [("charset", "utf-8")])
   dispositionFor = Const Nothing
-  encodingFor = Const (Just (QuotedPrintable True))
+  encodingFor = Const (Just QuotedPrintableText)
   makePartContent = renderHtml
 
 instance ToSinglePart PDF where
