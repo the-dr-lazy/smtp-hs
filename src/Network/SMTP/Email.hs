@@ -86,14 +86,13 @@ renderMail m@Mail{..} =
       Nothing -> pure $ Left UnspecifiedContent
       Just parts -> fmap Right $ do
         PartBuilder{..} <- mixedParts =<< forM parts (partBuilder Alternative)
-        pure . toLazyByteString $
-          fold
-            [ mailboxHeaders m
-            , foldMap buildHeaders $ mailHeaders <> [("MIME-Version", "1.0")]
-            , foldMap buildHeaders headers
-            , "\n"
-            , bsbuilder
-            ]
+        pure . toLazyByteString . fold $
+          [ mailboxHeaders m
+          , foldMap buildHeaders $ mailHeaders <> [("MIME-Version", "1.0")]
+          , foldMap buildHeaders headers
+          , "\n"
+          , bsbuilder
+          ]
 
 subject :: Text -> Mail -> Mail
 subject subj m = m{mailHeaders = ("Subject", subj) : mailHeaders m}
@@ -119,7 +118,7 @@ attachPart :: Part mult -> Mail -> Mail
 attachPart p m = m{mailParts = mailParts m ++ [pure $ somePart p]}
 
 attach :: (ToSinglePart part) => part -> Mail -> Mail
-attach p m = m{mailParts = mailParts m ++ [pure . somePart $ toSinglePart p]}
+attach p = attachPart (toSinglePart p)
 
 attachFile :: (MonadIO m) => FilePath -> Text -> MediaType -> Mail -> m Mail
 attachFile file name media m = filePart file name media <&> (`attachPart` m)
