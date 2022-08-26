@@ -30,14 +30,40 @@ data SMTPSettings = SMTPSettings
   deriving (Show)
 
 class (MonadRandom m, MonadIO m) => MonadSMTP m where
+  {-# MINIMAL smtpSettings #-}
   smtpSettings :: m SMTPSettings
 
   -- |
-  -- Login to the SMTP server using the 'SMTPSettings',
+  -- Login to the SMTP server using the default 'SMTPSettings',
   -- then render and send the email.
   sendMail :: Mail -> m ()
   sendMail m@Mail{..} = do
     SMTPSettings{..} <- smtpSettings
+    let connect = case cxmethod of
+          SMTP -> connectSMTP'
+          SMTPS -> connectSMTP'
+          SMTPSTARTTLS -> connectSMTPSTARTTLS'
+    (connection, _response) <- connect hostname port Nothing tlsSettings
+    usingReaderT connection $ do
+      let credentials = liftM2 (,) username password
+      whenJust credentials $ \(u, p) ->
+        void $ commandOrQuit 1 (AUTH LOGIN u p) 235
+      let from = emailByteString (mailboxEmail mailFrom)
+          tos = emailByteString . mailboxEmail <$> mailTo <> mailCc <> mailBcc
+      mrendered <- renderMail m
+      case mrendered of
+        Left er -> liftIO . fail $ show er
+        Right mail -> do
+          void $ commandOrQuit 1 (MAIL from) 250
+          for_ tos $ \r -> commandOrQuit 1 (RCPT r) 250
+          void $ commandOrQuit 1 (DATA $ toStrict mail) 250
+      closeSMTP
+
+  -- |
+  -- Login to the SMTP server using the provided 'SMTPSettings',
+  -- then render and send the email.
+  sendMailWith :: SMTPSettings -> Mail -> m ()
+  sendMailWith SMTPSettings{..} m@Mail{..} = do
     let connect = case cxmethod of
           SMTP -> connectSMTP'
           SMTPS -> connectSMTP'
