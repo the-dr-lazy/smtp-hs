@@ -129,9 +129,9 @@ singleBuilder Part{partContent = Single bs, ..} = PartBuilder{..}
     Just Base64 ->
       foldMap' ((<> "\r\n") . lazyByteString . B64L.encode) $
         unfoldr (BSL.splitAt 57 <<$>> guarded BSL.null) bs
-    Just QuotedPrintableText -> qpBuilder $ toQP True bs
-    Just QuotedPrintableBinary -> qpBuilder $ toQP False bs
-    Nothing -> lazyByteString bs
+    Just QuotedPrintable -> qpBuilder $ toQP True bs
+    Just Binary -> qpBuilder $ toQP False bs
+    _ -> lazyByteString bs
 
 -- |
 -- Prepare a nested 'Part' for 'ByteString' conversion.
@@ -267,7 +267,7 @@ class ToSinglePart a where
 
   encodingFor :: Const (Maybe ContentTransferEncoding) a
   default encodingFor :: (ToText a) => Const (Maybe ContentTransferEncoding) a
-  encodingFor = Const (Just QuotedPrintableText)
+  encodingFor = Const (Just QuotedPrintable)
 
   makePartContent :: a -> BSL.ByteString
 
@@ -315,7 +315,7 @@ instance ToSinglePart Text where makePartContent = encodeUtf8
 instance ToSinglePart Html where
   contentTypeFor = Const (ContentType TextHtml [("charset", "utf-8")])
   dispositionFor = Const Nothing
-  encodingFor = Const (Just QuotedPrintableText)
+  encodingFor = Const (Just QuotedPrintable)
   makePartContent = renderHtml
 
 instance ToSinglePart PDF where
