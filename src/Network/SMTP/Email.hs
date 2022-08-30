@@ -35,18 +35,6 @@ buildMailbox Mailbox{..} =
     , ">"
     ]
 
--- |
--- > message :: Mail
--- > message =
--- >   newmessage [mailbox|masterword@masterword.com|]
--- >     & to [mailboxes|vverdi@masterword.com|]
--- >     & subject "New email code!"
--- >     & body
--- >       [hamlet|
--- >         <html>
--- >           <body>
--- >             <p>Right on!!
--- >       |]
 data Mail = Mail
   { mailFrom :: Mailbox
   , mailTo :: [Mailbox]
