@@ -1,7 +1,3 @@
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE TemplateHaskell #-}
-
 module Network.SMTP.Email (
   module Network.SMTP.Email.Parse,
   Mail (..),
@@ -29,7 +25,7 @@ import Text.Blaze.Html (Html)
 buildMailbox :: Mailbox -> Builder
 buildMailbox Mailbox{..} =
   fold
-    [ maybe mempty ((<> " ") . encodeEscapedUtf8) mailboxName
+    [ foldMap ((<> " ") . encodeEscapedUtf8) mailboxName
     , "<"
     , byteString $ emailByteString mailboxEmail
     , ">"

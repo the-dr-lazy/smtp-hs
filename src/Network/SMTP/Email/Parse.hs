@@ -116,10 +116,10 @@ localPart (Email l _) = l
 domainPart (Email _ d) = d
 
 validEmail :: Text -> Bool
-validEmail = either (const False) (const True) . validateEmail
+validEmail = not . null . validateEmail
 
 validMailbox :: Text -> Bool
-validMailbox = either (const False) (const True) . validateMailbox
+validMailbox = not . null . validateMailbox
 
 validateEmail :: Text -> Either String Email
 validateEmail = (show +++ id) . parse (addrSpec <* eof) ""

@@ -9,6 +9,7 @@
 module Codec.MIME (
   module MIME,
   Part (..),
+  Mult (..),
   related,
   PartContent (..),
   PartBuilder (..),
@@ -40,9 +41,12 @@ import System.FilePath (takeBaseName, takeExtension)
 import Text.Blaze.Html (Html)
 import Text.Blaze.Html.Renderer.Utf8 (renderHtml)
 import Yesod.Content.PDF (PDF (pdfBytes))
+import Prelude hiding (One (..))
 
 -- | The multiplicity of a 'Part'.
-data Mult = One | Many
+data Mult
+  = One
+  | Many
 
 -- |
 -- A 'Part' is an abstract representation of a part of an email;
@@ -53,6 +57,7 @@ data Mult = One | Many
 -- possibly a 'Disposition', possibly a 'ContentTransferEncoding',
 -- possibly a "partLocation" (or URI) where it
 -- can be found, and perhaps additional headers.
+type Part :: Mult -> Type
 data Part mult = Part
   { partContentType :: ContentType
   , partDisposition :: Maybe Disposition
@@ -65,9 +70,10 @@ data Part mult = Part
 -- |
 -- The content of a 'Part' is either standalone, or it can be a single nested
 -- collection of standalone parts.
-data PartContent (mult :: Mult) where
-  Single :: BSL.ByteString -> PartContent 'One
-  Multiple :: NonEmpty (Part 'One) -> PartContent 'Many
+type PartContent :: Mult -> Type
+data PartContent mult where
+  Single :: BSL.ByteString -> PartContent One
+  Multiple :: NonEmpty (Part One) -> PartContent Many
 
 -- |
 -- An intermediate step between the datatype representation of a 'Part' and the
@@ -78,7 +84,7 @@ data PartBuilder = PartBuilder
   }
 
 -- | Connect multiple standalone 'Part's into a @multipart/related@ 'Part'.
-related :: NonEmpty (Part 'One) -> Part 'Many
+related :: NonEmpty (Part One) -> Part Many
 related parts =
   Part
     (ContentType MultipartRelated [])
@@ -107,7 +113,7 @@ buildHeaders (hname, hval) =
     ]
 
 -- | Prepare a standalone 'Part' for 'ByteString' conversion.
-singleBuilder :: Part 'One -> PartBuilder
+singleBuilder :: Part One -> PartBuilder
 singleBuilder Part{partContent = Single bs, ..} = PartBuilder{..}
  where
   encodingHeader = case partEncoding of
@@ -136,7 +142,7 @@ singleBuilder Part{partContent = Single bs, ..} = PartBuilder{..}
 -- |
 -- Prepare a nested 'Part' for 'ByteString' conversion.
 -- A 'Boundary' delineator is required.
-multipleBuilder :: Boundary -> Part 'Many -> PartBuilder
+multipleBuilder :: Boundary -> Part Many -> PartBuilder
 multipleBuilder (Boundary bdy) Part{partContent = Multiple ps} = PartBuilder{..}
  where
   headers =
@@ -151,7 +157,7 @@ multipleBuilder (Boundary bdy) Part{partContent = Multiple ps} = PartBuilder{..}
   bsbuilder =
     foldMap' (boundarypart bdy) ps <> "--" <> byteString (encodeUtf8 bdy) <> "--"
 
-  boundarypart :: Text -> Part 'One -> Builder
+  boundarypart :: Text -> Part One -> Builder
   boundarypart bd Part{partContent = Single bs, partHeaders} =
     foldMap' byteString ["--", encodeUtf8 bd, "\n"]
       <> foldMap' buildHeaders partHeaders
@@ -163,24 +169,24 @@ multipleBuilder (Boundary bdy) Part{partContent = Multiple ps} = PartBuilder{..}
 -- Delay the handling of the multiplicity of a part for the purposes
 -- of 'partEncoding' the entire message.
 data SomePart
-  = SPOne (Part 'One)
-  | SPMany (Part 'Many)
+  = SPMultOne (Part One)
+  | SPMany (Part Many)
 
 instance Eq SomePart where _ == _ = False
 
 instance Ord SomePart where
-  SPOne part `compare` SPOne part' =
+  SPMultOne part `compare` SPMultOne part' =
     comparing (fmap dispType) (partDisposition part) (partDisposition part')
-  SPOne part `compare` SPMany part' =
+  SPMultOne part `compare` SPMany part' =
     comparing (fmap dispType) (partDisposition part) (partDisposition part')
-  SPMany part `compare` SPOne part' =
+  SPMany part `compare` SPMultOne part' =
     comparing (fmap dispType) (partDisposition part) (partDisposition part')
   SPMany part `compare` SPMany part' =
     comparing (fmap dispType) (partDisposition part) (partDisposition part')
 
 -- | Wrap the multiplicity of a 'Part'.
 somePart :: Part mult -> SomePart
-somePart p@Part{partContent = Single _} = SPOne p
+somePart p@Part{partContent = Single _} = SPMultOne p
 somePart p@Part{partContent = Multiple _} = SPMany p
 
 -- |
@@ -194,7 +200,7 @@ partBuilder ::
   NonEmpty SomePart ->
   m PartBuilder
 partBuilder _ (a :| []) = case a of
-  SPOne p -> pure $ singleBuilder p
+  SPMultOne p -> pure $ singleBuilder p
   SPMany p -> (`multipleBuilder` p) <$> getRandom
 partBuilder m arbs = do
   pbs <- forM arbs $ partBuilder m . pure
@@ -274,7 +280,7 @@ class ToSinglePart a where
 -- |
 -- Convert a value to a 'Part' with the default
 -- 'partDisposition' and 'partEncoding' for its type.
-toSinglePart :: forall a. (ToSinglePart a) => a -> Part 'One
+toSinglePart :: forall a. (ToSinglePart a) => a -> Part One
 toSinglePart a = Part{..}
  where
   Const partContentType = contentTypeFor @a
@@ -287,7 +293,7 @@ toSinglePart a = Part{..}
 -- |
 -- Convert a file to a 'Part', with the specified file path,
 -- file name and media type.
-filePart :: (MonadIO m) => FilePath -> Text -> MediaType -> m (Part 'One)
+filePart :: (MonadIO m) => FilePath -> Text -> MediaType -> m (Part One)
 filePart fp name media = do
   let partContentType = ContentType media [("charset", "utf-8")]
       partDisposition = Just (Disposition Attachment [FilenameStar name])
@@ -298,7 +304,7 @@ filePart fp name media = do
   pure Part{..}
 
 -- | Add the image at the specified file path to an email message.
-imagePart :: (MonadIO m) => FilePath -> m (Part 'One)
+imagePart :: (MonadIO m) => FilePath -> m (Part One)
 imagePart fp = do
   let name = toText $ takeBaseName fp
       ext = toText $ takeExtension fp
@@ -313,13 +319,21 @@ imagePart fp = do
 instance ToSinglePart Text where makePartContent = encodeUtf8
 
 instance ToSinglePart Html where
+  contentTypeFor :: Const ContentType Html
   contentTypeFor = Const (ContentType TextHtml [("charset", "utf-8")])
+  dispositionFor :: Const (Maybe Disposition) Html
   dispositionFor = Const Nothing
+  encodingFor :: Const (Maybe ContentTransferEncoding) Html
   encodingFor = Const (Just QuotedPrintable)
+  makePartContent :: Html -> BSL.ByteString
   makePartContent = renderHtml
 
 instance ToSinglePart PDF where
+  contentTypeFor :: Const ContentType PDF
   contentTypeFor = Const (ContentType ApplicationPdf [("charset", "utf-8")])
+  dispositionFor :: Const (Maybe Disposition) PDF
   dispositionFor = Const (Just (Disposition Attachment []))
+  encodingFor :: Const (Maybe ContentTransferEncoding) PDF
   encodingFor = Const (Just Base64)
+  makePartContent :: PDF -> BSL.ByteString
   makePartContent = fromStrict . pdfBytes

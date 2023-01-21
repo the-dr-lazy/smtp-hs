@@ -1,68 +1,69 @@
 cabal-version: 2.4
+name:          smtp-hs
+version:       0.0.1.0
+synopsis:
+  A self-contained library for working with MIME and sending email via SMTP.
 
-name: smtp-hs
-version: 0.0.1.0
-synopsis: A self-contained library for working with MIME and sending email via SMTP.
-homepage: https://github.com/mixphix/smtp-hs
-bug-reports: https://github.com/mixphix/smtp-hs/issues
-license: BSD-3-Clause
-license-file: LICENSE
-author: Melanie Brown
-maintainer: brown.m@pm.me
-copyright: 2021 Melanie Brown
-category: Network
-build-type: Simple
-stability: alpha
+homepage:      https://github.com/mixphix/smtp-hs
+bug-reports:   https://github.com/mixphix/smtp-hs/issues
+license:       BSD-3-Clause
+license-file:  LICENSE
+author:        Melanie Brown
+maintainer:    brown.m@pm.me
+copyright:     2021 Melanie Brown
+category:      Network
+build-type:    Simple
+stability:     alpha
 -- extra-source-files:
 
 common shared
-  default-language: Haskell2010
+  default-language:   GHC2021
   default-extensions:
+    BlockArguments
+    DataKinds
     DerivingStrategies
-    , GeneralizedNewtypeDeriving
-    , ImportQualifiedPost
-    , LambdaCase
-    , MultiWayIf
-    , NamedFieldPuns
-    , OverloadedStrings
-    , PatternSynonyms
-    , QuasiQuotes
-    , RecordWildCards
-    , ScopedTypeVariables
-    , TupleSections
-    , TypeApplications
-    , ViewPatterns
-  ghc-options: -Wall
+    LambdaCase
+    MultiWayIf
+    OverloadedStrings
+    PatternSynonyms
+    QuasiQuotes
+    RecordWildCards
+    TypeFamilies
+    ViewPatterns
+
+  ghc-options:        -O2 -Wall
   build-depends:
-    base >= 4.14 && < 5
+    , base      >=4.14 && <5
     , filepath
     , relude
     , text
+
   mixins:
-    base hiding (Prelude)
-    , relude (Relude as Prelude)
-    , relude
+    base hiding (Prelude),
+    relude (Relude as Prelude),
+    relude
 
 library
-  import: shared
-  hs-source-dirs: src
+  import:          shared
+  hs-source-dirs:  src
   exposed-modules:
+    Codec.MIME
+    Codec.MIME.Boundary
+    Codec.MIME.ContentTransferEncoding
+    Codec.MIME.ContentTypes
+    Codec.MIME.Disposition
+    Codec.MIME.QuotedPrintable
+    Codec.MIME.TextEncoding
     Control.Monad.Email
-    , Network.SMTP
-    , Network.SMTP.Auth
-    , Network.SMTP.Command
-    , Network.SMTP.Email
-    , Network.SMTP.Email.Parse
-    , Network.SMTP.Response
-    , Codec.MIME
-    , Codec.MIME.Boundary
-    , Codec.MIME.ContentTransferEncoding
-    , Codec.MIME.ContentTypes
-    , Codec.MIME.Disposition
-    , Codec.MIME.QuotedPrintable
-    , Codec.MIME.TextEncoding
+    Network.SMTP
+    Network.SMTP.Auth
+    Network.SMTP.Command
+    Network.SMTP.Email
+    Network.SMTP.Email.Parse
+    Network.SMTP.Response
+
   build-depends:
-    base16-bytestring
+    , base16-bytestring
     , base64-bytestring
     , blaze-html
     , bytestring
@@ -74,34 +75,35 @@ library
     , network
     , network-bsd
     , parsec
-    , random >= 1.2.0
+    , random             >=1.2.0
     , template-haskell
     , time
     , time-compat
     , yesod-content-pdf
+
   mixins:
-    base hiding (Prelude)
-    , relude (Relude as Prelude)
-    , relude
+    base hiding (Prelude),
+    relude (Relude as Prelude),
+    relude
 
 test-suite codec-tests
-  import: shared
-  type: exitcode-stdio-1.0
+  import:         shared
+  type:           exitcode-stdio-1.0
   hs-source-dirs: tests
-  main-is: codec-tests.hs
-  ghc-options: -threaded
+  main-is:        codec-tests.hs
+  ghc-options:    -threaded
   build-depends:
-    hspec
+    , hspec
     , smtp-hs
 
 test-suite email-tests
-  import: shared
-  type: exitcode-stdio-1.0
+  import:         shared
+  type:           exitcode-stdio-1.0
   hs-source-dirs: tests
-  main-is: email-tests.hs
-  ghc-options: -threaded
+  main-is:        email-tests.hs
+  ghc-options:    -threaded
   build-depends:
-    hspec
+    , hspec
     , network
     , network-bsd
     , QuickCheck

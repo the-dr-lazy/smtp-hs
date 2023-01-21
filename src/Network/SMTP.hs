@@ -1,5 +1,3 @@
-{-# LANGUAGE FlexibleContexts #-}
-
 module Network.SMTP where
 
 import Data.ByteString qualified as BS

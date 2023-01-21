@@ -1,4 +1,4 @@
 packages: .
-
-package smtp-hs
-  optimization: 2
+allow-newer:
+  , relude:base
+  , relude:ghc-prim
