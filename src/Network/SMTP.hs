@@ -88,12 +88,12 @@ command ::
   Command ->
   ReplyCode ->
   m (Maybe ByteString)
-command times _ _ | times <= 0 = pure Nothing
 command times cmd expect = do
   (code, msg) <- sendCommand cmd
-  if code == expect
-    then pure $ Just msg
-    else command (prev times) cmd expect
+  if
+      | code == expect -> pure (Just msg)
+      | times <= 0 -> pure Nothing
+      | otherwise -> command (prev times) cmd expect
 
 commandOrQuit ::
   (MonadReader Connection m, MonadIO m) =>
@@ -101,27 +101,24 @@ commandOrQuit ::
   Command ->
   ReplyCode ->
   m ByteString
-commandOrQuit 1 cmd expect = do
-  (code, msg) <- sendCommand cmd
-  if code == expect
-    then pure msg
-    else do
-      closeSMTP
-      liftIO . fail $
-        "Unexpected reply to \""
-          <> show cmd
-          <> "\": Expected "
-          <> show expect
-          <> " but got \""
-          <> show code
-          <> ": "
-          <> decodeUtf8 msg
-          <> "\""
 commandOrQuit times cmd expect = do
   (code, msg) <- sendCommand cmd
-  if code == expect
-    then pure msg
-    else commandOrQuit (prev times) cmd expect
+  if
+      | code == expect -> pure msg
+      | times > 1 -> commandOrQuit (prev times) cmd expect
+      | otherwise -> do
+          closeSMTP
+          liftIO . fail . fold $
+            [ "Unexpected reply to \""
+            , show cmd
+            , "\": Expected "
+            , show expect
+            , " but got \""
+            , show code
+            , ": "
+            , decodeUtf8 msg
+            , "\""
+            ]
 
 smtpconnect ::
   (MonadReader Connection m, MonadIO m) =>
@@ -129,13 +126,14 @@ smtpconnect ::
   m [ByteString]
 smtpconnect gethostname = do
   code <- replyCode
-  unless (code == 220) $ do
+  unless (code == 220) do
     connection <- ask
-    liftIO $ connectionClose connection >> fail "Could not connect to server"
+    liftIO do
+      connectionClose connection
+      fail "Could not connect to server"
   sender <- liftIO gethostname
-  mehlo <- command 3 (EHLO $ encodeUtf8 sender) 250
-  case mehlo of
-    Just ehlo -> pure . drop 1 $ B8.lines ehlo
+  command 3 (EHLO $ encodeUtf8 sender) 250 >>= \case
+    Just ehlo -> pure $ drop 1 (B8.lines ehlo)
     Nothing -> do
       mhelo <- command 3 (HELO $ encodeUtf8 sender) 250
       pure $ maybe [] (drop 1 . B8.lines) mhelo
@@ -148,9 +146,11 @@ smtpconnectSTARTTLS ::
   m [ByteString]
 smtpconnectSTARTTLS gethostname context tls = do
   code <- replyCode
-  unless (code == 220) $ do
+  unless (code == 220) do
     connection <- ask
-    liftIO $ connectionClose connection >> fail "Could not connect to server"
+    liftIO do
+      connectionClose connection
+      fail "Could not connect to server"
   sender <- liftIO gethostname
   void $ commandOrQuit 3 (EHLO $ encodeUtf8 sender) 250
   void $ commandOrQuit 1 STARTTLS 220
@@ -191,11 +191,20 @@ connectSMTPSTARTTLS' hostname mport mgethost mtls = do
     smtpconnectSTARTTLS gethostname context (mtls ?: defaulttls)
 
 connectSMTP :: (MonadIO m) => HostName -> m (Connection, [ByteString])
-connectSMTP hostname = connectSMTP' hostname Nothing Nothing Nothing
+connectSMTP hostname =
+  connectSMTP'
+    hostname
+    Nothing
+    Nothing
+    Nothing
 
 connectSMTPS :: (MonadIO m) => HostName -> m (Connection, [ByteString])
 connectSMTPS hostname =
-  connectSMTP' hostname (Just 465) Nothing (Just defaulttls)
+  connectSMTP'
+    hostname
+    (Just 465)
+    Nothing
+    (Just defaulttls)
 
 connectSMTPSTARTTLS :: (MonadIO m) => HostName -> m (Connection, [ByteString])
 connectSMTPSTARTTLS hostname =
