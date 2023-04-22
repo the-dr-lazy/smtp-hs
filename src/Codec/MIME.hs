@@ -31,17 +31,26 @@ import Codec.MIME.ContentTypes as MIME
 import Codec.MIME.Disposition as MIME
 import Codec.MIME.QuotedPrintable as MIME
 import Codec.MIME.TextEncoding as MIME
+import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.Random (MonadRandom (getRandom))
 import Data.ByteString.Base64.Lazy qualified as B64L
 import Data.ByteString.Builder (Builder, byteString, lazyByteString)
 import Data.ByteString.Lazy qualified as BSL
 import Data.Char (isAscii)
-import Data.Text qualified as T
+import Data.Foldable (fold)
+import Data.Functor.Const (Const (Const))
+import Data.Kind (Type)
+import Data.List (unfoldr)
+import Data.List.NonEmpty (NonEmpty ((:|)))
+import Data.Ord (comparing)
+import Data.Text (Text)
+import Data.Text qualified as Text
+import Data.Text.Encoding qualified as Text (encodeUtf8)
+import Data.Traversable (for)
 import System.FilePath (takeBaseName, takeExtension)
 import Text.Blaze.Html (Html)
 import Text.Blaze.Html.Renderer.Utf8 (renderHtml)
 import Yesod.Content.PDF (PDF (pdfBytes))
-import Prelude hiding (One (..))
 
 -- | The multiplicity of a 'Part'.
 data Mult
@@ -103,11 +112,11 @@ encodeEscapedUtf8 t = fold ["=?utf-8?Q?", byteString $ rfc2822 t, "?="]
 buildHeaders :: (Text, Text) -> Builder
 buildHeaders (hname, hval) =
   fold
-    [ byteString . encodeUtf8 $
-        T.filter (\w -> w /= ':' && '!' <= w && w <= '~') hname
+    [ byteString . Text.encodeUtf8 $
+        Text.filter (\w -> w /= ':' && '!' <= w && w <= '~') hname
     , ": "
-    , if T.all isAscii hval
-        then byteString $ encodeUtf8 hval
+    , if Text.all isAscii hval
+        then byteString $ Text.encodeUtf8 hval
         else encodeEscapedUtf8 hval
     , "\n"
     ]
@@ -133,8 +142,9 @@ singleBuilder Part{partContent = Single bs, ..} = PartBuilder{..}
       $ partHeaders
   bsbuilder = case partEncoding of
     Just Base64 ->
-      foldMap' ((<> "\r\n") . lazyByteString . B64L.encode) $
-        unfoldr (BSL.splitAt 57 <<$>> guarded BSL.null) bs
+      foldMap ((<> "\r\n") . lazyByteString . B64L.encode) $
+        flip unfoldr bs \b ->
+          if BSL.null b then Nothing else pure (BSL.splitAt 57 b)
     Just QuotedPrintable -> qpBuilder $ toQP True bs
     Just Binary -> qpBuilder $ toQP False bs
     _ -> lazyByteString bs
@@ -155,15 +165,22 @@ multipleBuilder (Boundary bdy) Part{partContent = Multiple ps} = PartBuilder{..}
       )
     ]
   bsbuilder =
-    foldMap' (boundarypart bdy) ps <> "--" <> byteString (encodeUtf8 bdy) <> "--"
+    fold
+      [ foldMap (boundarypart bdy) ps
+      , "--"
+      , byteString (Text.encodeUtf8 bdy)
+      , "--"
+      ]
 
   boundarypart :: Text -> Part One -> Builder
   boundarypart bd Part{partContent = Single bs, partHeaders} =
-    foldMap' byteString ["--", encodeUtf8 bd, "\n"]
-      <> foldMap' buildHeaders partHeaders
-      <> "\n"
-      <> lazyByteString bs
-      <> "\n"
+    fold
+      [ foldMap byteString ["--", Text.encodeUtf8 bd, "\n"]
+      , foldMap buildHeaders partHeaders
+      , "\n"
+      , lazyByteString bs
+      , "\n"
+      ]
 
 -- |
 -- Delay the handling of the multiplicity of a part for the purposes
@@ -203,7 +220,7 @@ partBuilder _ (a :| []) = case a of
   SPMultOne p -> pure $ singleBuilder p
   SPMany p -> (`multipleBuilder` p) <$> getRandom
 partBuilder m arbs = do
-  pbs <- forM arbs $ partBuilder m . pure
+  pbs <- for arbs $ partBuilder m . pure
   Boundary bdy <- getRandom
   let headers =
         [
@@ -212,19 +229,23 @@ partBuilder m arbs = do
           )
         ]
       bsbuilder =
-        foldMap' (boundarypart bdy) pbs
-          <> "--"
-          <> byteString (encodeUtf8 bdy)
-          <> "--"
+        fold
+          [ foldMap (boundarypart bdy) pbs
+          , "--"
+          , byteString (Text.encodeUtf8 bdy)
+          , "--"
+          ]
   pure PartBuilder{..}
  where
   boundarypart :: Text -> PartBuilder -> Builder
   boundarypart bdy PartBuilder{..} =
-    foldMap' byteString ["--", encodeUtf8 bdy, "\n"]
-      <> foldMap' buildHeaders headers
-      <> "\n"
-      <> bsbuilder
-      <> "\n"
+    fold
+      [ foldMap byteString ["--", Text.encodeUtf8 bdy, "\n"]
+      , foldMap buildHeaders headers
+      , "\n"
+      , bsbuilder
+      , "\n"
+      ]
 
 -- |
 -- Create a 'PartBuilder' for the entire message given the 'PartBuilder's
@@ -240,19 +261,23 @@ mixedParts ps = do
           )
         ]
       bsbuilder =
-        foldMap' (boundarypart bdy) ps
-          <> "--"
-          <> byteString (encodeUtf8 bdy)
-          <> "--"
+        fold
+          [ foldMap (boundarypart bdy) ps
+          , "--"
+          , byteString (Text.encodeUtf8 bdy)
+          , "--"
+          ]
   pure PartBuilder{..}
  where
   boundarypart :: Text -> PartBuilder -> Builder
   boundarypart bdy PartBuilder{..} =
-    foldMap' byteString ["--", encodeUtf8 bdy, "\n"]
-      <> foldMap' buildHeaders headers
-      <> "\n"
-      <> bsbuilder
-      <> "\n"
+    fold
+      [ foldMap byteString ["--", Text.encodeUtf8 bdy, "\n"]
+      , foldMap buildHeaders headers
+      , "\n"
+      , bsbuilder
+      , "\n"
+      ]
 
 -- |
 -- 'ToSinglePart' captures the data-specific method to attach itself
@@ -264,15 +289,15 @@ mixedParts ps = do
 -- for its representation if you plan to send it via email.
 class ToSinglePart a where
   contentTypeFor :: Const ContentType a
-  default contentTypeFor :: (ToText a) => Const ContentType a
+  default contentTypeFor :: (Show a) => Const ContentType a
   contentTypeFor = Const $ ContentType TextPlain [("charset", "utf-8")]
 
   dispositionFor :: Const (Maybe Disposition) a
-  default dispositionFor :: (ToText a) => Const (Maybe Disposition) a
+  default dispositionFor :: (Show a) => Const (Maybe Disposition) a
   dispositionFor = Const Nothing
 
   encodingFor :: Const (Maybe ContentTransferEncoding) a
-  default encodingFor :: (ToText a) => Const (Maybe ContentTransferEncoding) a
+  default encodingFor :: (Show a) => Const (Maybe ContentTransferEncoding) a
   encodingFor = Const (Just QuotedPrintable)
 
   makePartContent :: a -> BSL.ByteString
@@ -300,23 +325,25 @@ filePart fp name media = do
       partEncoding = Just Base64
       partLocation = Just name
       partHeaders = []
-  partContent <- Single <$> readFileLBS fp
+  partContent <- Single <$> liftIO (BSL.readFile fp)
   pure Part{..}
 
 -- | Add the image at the specified file path to an email message.
 imagePart :: (MonadIO m) => FilePath -> m (Part One)
 imagePart fp = do
-  let name = toText $ takeBaseName fp
-      ext = toText $ takeExtension fp
+  let name = Text.pack $ takeBaseName fp
+      ext = Text.pack $ takeExtension fp
       partContentType = ContentType (Image [ext]) []
       partDisposition = Just (Disposition Inline [FilenameStar name])
       partEncoding = Just Base64
       partLocation = Just name
       partHeaders = []
-  partContent <- Single <$> readFileLBS fp
+  partContent <- Single <$> liftIO (BSL.readFile fp)
   pure Part{..}
 
-instance ToSinglePart Text where makePartContent = encodeUtf8
+instance ToSinglePart Text where
+  makePartContent :: Text -> BSL.ByteString
+  makePartContent = BSL.fromStrict . Text.encodeUtf8
 
 instance ToSinglePart Html where
   contentTypeFor :: Const ContentType Html
@@ -336,4 +363,4 @@ instance ToSinglePart PDF where
   encodingFor :: Const (Maybe ContentTransferEncoding) PDF
   encodingFor = Const (Just Base64)
   makePartContent :: PDF -> BSL.ByteString
-  makePartContent = fromStrict . pdfBytes
+  makePartContent = BSL.fromStrict . pdfBytes

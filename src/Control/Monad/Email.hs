@@ -9,7 +9,13 @@ module Control.Monad.Email (
   module Network.SMTP.Email,
 ) where
 
-import Control.Monad.Random (MonadRandom)
+import Control.Applicative (liftA2)
+import Control.Monad (void)
+import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Random (MonadIO, MonadRandom)
+import Control.Monad.Reader (ReaderT (runReaderT))
+import Data.ByteString qualified as BS (toStrict)
+import Data.Foldable (for_)
 import Network.Connection (TLSSettings)
 import Network.SMTP
 import Network.SMTP.Auth
@@ -49,9 +55,10 @@ class (MonadRandom m, MonadIO m) => MonadSMTP m where
           SMTPS -> connectSMTP'
           SMTPSTARTTLS -> connectSMTPSTARTTLS'
     (connection, _response) <- connect hostname port Nothing tlsSettings
-    usingReaderT connection do
-      whenJust (liftA2 (,) username password) \(u, p) ->
-        void $ commandOrQuit 1 (AUTH LOGIN u p) 235
+    flip runReaderT connection do
+      case liftA2 (,) username password of
+        Nothing -> pure ()
+        Just (u, p) -> void $ commandOrQuit 1 (AUTH LOGIN u p) 235
       let box = emailByteString . mailboxEmail
           from = box mailFrom
           tos = box <$> mailTo <> mailCc <> mailBcc
@@ -60,5 +67,5 @@ class (MonadRandom m, MonadIO m) => MonadSMTP m where
         Right mail -> do
           void $ commandOrQuit 1 (MAIL from) 250
           for_ tos \r -> commandOrQuit 1 (RCPT r) 250
-          void $ commandOrQuit 1 (DATA $ toStrict mail) 250
+          void $ commandOrQuit 1 (DATA $ BS.toStrict mail) 250
       closeSMTP

@@ -3,6 +3,8 @@ module Codec.MIME.ContentTransferEncoding (
   contenttransferencoding,
 ) where
 
+import Data.Text (Text)
+
 -- |
 -- The value of the "Content-Transfer-Encoding" header.
 data ContentTransferEncoding

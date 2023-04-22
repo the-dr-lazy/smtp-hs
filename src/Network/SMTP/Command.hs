@@ -1,5 +1,6 @@
 module Network.SMTP.Command (Command (..)) where
 
+import Data.ByteString (ByteString)
 import Network.SMTP.Auth (AuthType, Password, Username)
 
 data Command

@@ -19,6 +19,13 @@ import Codec.MIME
 import Control.Monad.Random
 import Data.ByteString.Builder (Builder, byteString, toLazyByteString)
 import Data.ByteString.Lazy qualified as BSL
+import Data.Foldable (fold)
+import Data.Functor ((<&>))
+import Data.List (sort)
+import Data.List.NonEmpty (NonEmpty ((:|)), nonEmpty)
+import Data.Text (Text)
+import Data.Text.Encoding (encodeUtf8)
+import GHC.Generics (Generic)
 import Network.SMTP.Email.Parse
 import Text.Blaze.Html (Html)
 

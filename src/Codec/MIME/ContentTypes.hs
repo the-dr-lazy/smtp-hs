@@ -17,8 +17,13 @@ module Codec.MIME.ContentTypes (
   pattern MultipartRelated,
 ) where
 
+import Control.Applicative (Alternative (..))
+import Data.Foldable (fold)
+import Data.Function (on)
+import Data.Text (Text)
 import Data.Text qualified as Text
-import Text.Parsec hiding (many, optional, (<|>))
+import Text.Parsec (ParseError)
+import Text.Parsec qualified as Parse
 import Text.Parsec.Text (Parser)
 
 -- | The value of the "Content-Type" header along with associated parameters.
@@ -31,23 +36,24 @@ data ContentType = ContentType
 -- | Get the proper 'Text' value for a 'ContentType'.
 contenttype :: ContentType -> Text
 contenttype ContentType{..} =
-  mediatype mediaType <> foldMap (\(name, val) -> fold ["; ", name, "=\"", val, "\""]) contentParams
+  mediatype mediaType <> flip foldMap contentParams \(name, val) ->
+    fold ["; ", name, "=\"", val, "\""]
 
 parseContentType :: Text -> Either ParseError ContentType
-parseContentType = parse contentTypeP ""
+parseContentType = Parse.parse contentTypeP ""
 
 contentTypeP :: Parser ContentType
 contentTypeP = do
-  mediaType <- mediaTypeP <* optional (char ';')
+  mediaType <- mediaTypeP <* Parse.optional (Parse.char ';')
   contentParams <-
-    ( on (,) toText
-        <$> manyTill accepted (char '=')
-        <*> many accepted
+    ( on (,) Text.pack
+        <$> Parse.manyTill accepted (Parse.char '=')
+        <*> Parse.many accepted
       )
-      `sepBy` char ';'
+      `Parse.sepBy` Parse.char ';'
   pure ContentType{..}
  where
-  accepted = try alphaNum <|> oneOf "-_.'"
+  accepted = Parse.try Parse.alphaNum <|> Parse.oneOf "-_.'"
 
 -- |
 -- The media type for the content beneath the header.
@@ -82,11 +88,11 @@ mediatype = \case
   Video ts -> "video/" <> Text.intercalate "+" ts
 
 parseMediaType :: Text -> Either ParseError MediaType
-parseMediaType = parse mediaTypeP ""
+parseMediaType = Parse.parse mediaTypeP ""
 
 mediaTypeP :: Parser MediaType
 mediaTypeP =
-  choice . map try $
+  Parse.choice . map Parse.try $
     [ applicationP
     , audioP
     , fontP
@@ -99,41 +105,41 @@ mediaTypeP =
     ]
  where
   applicationP =
-    Application . map toText
-      <$ string "application/"
-      <*> (many accepted `sepBy` try (char '+'))
+    Application . map Text.pack
+      <$ Parse.string "application/"
+      <*> (many accepted `Parse.sepBy` Parse.try (Parse.char '+'))
   audioP =
-    Audio . map toText
-      <$ string "audio/"
-      <*> (many accepted `sepBy` try (char '+'))
+    Audio . map Text.pack
+      <$ Parse.string "audio/"
+      <*> (many accepted `Parse.sepBy` Parse.try (Parse.char '+'))
   fontP =
-    Font . map toText
-      <$ string "font/"
-      <*> (many accepted `sepBy` try (char '+'))
+    Font . map Text.pack
+      <$ Parse.string "font/"
+      <*> (many accepted `Parse.sepBy` Parse.try (Parse.char '+'))
   imageP =
-    Image . map toText
-      <$ string "image/"
-      <*> (many accepted `sepBy` try (char '+'))
+    Image . map Text.pack
+      <$ Parse.string "image/"
+      <*> (many accepted `Parse.sepBy` Parse.try (Parse.char '+'))
   messageP =
-    Message . map toText
-      <$ string "message/"
-      <*> (many accepted `sepBy` try (char '+'))
+    Message . map Text.pack
+      <$ Parse.string "message/"
+      <*> (many accepted `Parse.sepBy` Parse.try (Parse.char '+'))
   modelP =
-    Model . map toText
-      <$ string "model/"
-      <*> (many accepted `sepBy` try (char '+'))
+    Model . map Text.pack
+      <$ Parse.string "model/"
+      <*> (many accepted `Parse.sepBy` Parse.try (Parse.char '+'))
   multipartP' =
-    Multipart <$> (string "multipart/" *> multipartP)
+    Multipart <$> (Parse.string "multipart/" *> multipartP)
   textP =
-    Text . map toText
-      <$ string "text/"
-      <*> (many accepted `sepBy` try (char '+'))
+    Text . map Text.pack
+      <$ Parse.string "text/"
+      <*> (many accepted `Parse.sepBy` Parse.try (Parse.char '+'))
   videoP =
-    Video . map toText
-      <$ string "video/"
-      <*> (many accepted `sepBy` try (char '+'))
+    Video . map Text.pack
+      <$ Parse.string "video/"
+      <*> (many accepted `Parse.sepBy` Parse.try (Parse.char '+'))
 
-  accepted = try alphaNum <|> oneOf "-_.'"
+  accepted = Parse.try Parse.alphaNum <|> Parse.oneOf "-_.'"
 
 -- |
 -- Typical values of multipart media types.
@@ -173,24 +179,24 @@ multipart = \case
   VoiceMessage -> "voice-message"
 
 parseMultipart :: Text -> Either ParseError Multipart
-parseMultipart = parse multipartP ""
+parseMultipart = Parse.parse multipartP ""
 
 multipartP :: Parser Multipart
 multipartP =
-  choice . map try $
-    [ Alternative <$ string "alternative"
-    , Byteranges <$ string "byteranges"
-    , Digest <$ string "digest"
-    , Encrypted <$ string "encrypted"
-    , Example <$ string "example"
-    , FormData <$ string "form-data"
-    , Mixed <$ string "mixed"
-    , Multilingual <$ string "multilingual"
-    , Parallel <$ string "parallel"
-    , Related <$ string "related"
-    , Report <$ string "report"
-    , Signed <$ string "signed"
-    , VoiceMessage <$ string "voice-message"
+  Parse.choice . map Parse.try $
+    [ Alternative <$ Parse.string "alternative"
+    , Byteranges <$ Parse.string "byteranges"
+    , Digest <$ Parse.string "digest"
+    , Encrypted <$ Parse.string "encrypted"
+    , Example <$ Parse.string "example"
+    , FormData <$ Parse.string "form-data"
+    , Mixed <$ Parse.string "mixed"
+    , Multilingual <$ Parse.string "multilingual"
+    , Parallel <$ Parse.string "parallel"
+    , Related <$ Parse.string "related"
+    , Report <$ Parse.string "report"
+    , Signed <$ Parse.string "signed"
+    , VoiceMessage <$ Parse.string "voice-message"
     ]
 
 pattern ApplicationPdf :: MediaType

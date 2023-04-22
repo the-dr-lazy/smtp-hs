@@ -9,12 +9,14 @@ module Network.SMTP.Auth (
 import Crypto.Hash.Algorithms (MD5)
 import Crypto.MAC.HMAC (HMAC, hmac)
 import Data.ByteArray (copyAndFreeze)
+import Data.ByteString (ByteString)
 import Data.ByteString.Base16 qualified as B16
 import Data.ByteString.Base64 qualified as B64
 import Data.ByteString.Char8 qualified as B8
 import Data.Char (isAscii)
-import Data.Text qualified as T
-import Text.Show (Show (..))
+import Data.Text (Text)
+import Data.Text qualified as Text
+import Data.Text.Encoding qualified as Text (encodeUtf8)
 
 data AuthType
   = PLAIN
@@ -36,13 +38,13 @@ newtype Password = Password Text
   deriving (Eq)
 
 instance Show Password where
-  show (Password u) = replicate (T.length u) '*'
+  show (Password u) = replicate (Text.length u) '*'
 
 ascii :: Text -> ByteString
-ascii t = case T.partition isAscii t of
+ascii t = case Text.partition isAscii t of
   (yes, no)
-    | T.null no -> encodeUtf8 yes
-    | otherwise -> error $ "expected ASCII but got: " <> no
+    | Text.null no -> Text.encodeUtf8 yes
+    | otherwise -> error $ "expected ASCII but got: " <> Text.unpack no
 
 encodeLogin :: Username -> Password -> (ByteString, ByteString)
 encodeLogin (Username u) (Password p) =
@@ -50,7 +52,7 @@ encodeLogin (Username u) (Password p) =
 
 auth :: AuthType -> Text -> Username -> Password -> ByteString
 auth at c user@(Username u) pw@(Password p) = case at of
-  PLAIN -> B64.encode . ascii $ T.intercalate "\0" [u, u, p]
+  PLAIN -> B64.encode . ascii $ Text.intercalate "\0" [u, u, p]
   LOGIN ->
     let (u', p') = encodeLogin user pw
      in B8.unwords [u', p']
@@ -58,4 +60,4 @@ auth at c user@(Username u) pw@(Password p) = case at of
     B64.encode $ B8.unwords [ascii u, B16.encode $ hmacMD5 (ascii c) (ascii p)]
  where
   hmacMD5 :: ByteString -> ByteString -> ByteString
-  hmacMD5 chlg pwd = copyAndFreeze (hmac pwd chlg :: HMAC MD5) (const pass)
+  hmacMD5 chlg pwd = copyAndFreeze (hmac pwd chlg :: HMAC MD5) (const (pure ()))

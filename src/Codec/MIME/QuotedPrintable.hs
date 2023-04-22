@@ -7,7 +7,7 @@ module Codec.MIME.QuotedPrintable (
 
 import Data.ByteString.Builder (Builder, char8)
 import Data.ByteString.Lazy.Char8 qualified as B8L
-import Data.Sequence (pattern Empty, pattern (:<|), pattern (:|>))
+import Data.Sequence (Seq, pattern Empty, pattern (:<|), pattern (:|>))
 
 data QPPart
   = Plain Builder
@@ -50,7 +50,7 @@ toQP isText = B8L.foldl' (\acc c -> acc <> qp c) mempty
 
 -- | Convert a quoted-printable encoding to a 'ByteString' 'Builder'.
 qpBuilder :: QP -> Builder
-qpBuilder (QP qps) = flip foldMap' qps $ \case
+qpBuilder (QP qps) = flip foldMap qps \case
   Plain bs -> bs
   Escape bs -> bs
   Newline -> "\r\n"

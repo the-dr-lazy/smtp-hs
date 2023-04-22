@@ -1,20 +1,18 @@
-cabal-version: 2.4
+cabal-version: 3.0
 name:          smtp-hs
-version:       0.0.1.0
-synopsis:
-  A self-contained library for working with MIME and sending email via SMTP.
-
+version:       0.0.2
 homepage:      https://github.com/mixphix/smtp-hs
 bug-reports:   https://github.com/mixphix/smtp-hs/issues
 license:       BSD-3-Clause
 license-file:  LICENSE
 author:        Melanie Brown
 maintainer:    brown.m@pm.me
-copyright:     2021 Melanie Brown
+copyright:     2021-2023 Melanie Brown
 category:      Network
 build-type:    Simple
 stability:     alpha
--- extra-source-files:
+synopsis:
+  A self-contained library for working with MIME and sending email via SMTP.
 
 common shared
   default-language:   GHC2021
@@ -33,15 +31,11 @@ common shared
 
   ghc-options:        -O2 -Wall
   build-depends:
-    , base      >=4.14 && <5
+    , base        >=4.14 && <5
+    , containers
     , filepath
-    , relude
+    , mtl
     , text
-
-  mixins:
-    base hiding (Prelude),
-    relude (Relude as Prelude),
-    relude
 
 library
   import:          shared
@@ -80,11 +74,6 @@ library
     , time
     , time-compat
     , yesod-content-pdf
-
-  mixins:
-    base hiding (Prelude),
-    relude (Relude as Prelude),
-    relude
 
 test-suite codec-tests
   import:         shared

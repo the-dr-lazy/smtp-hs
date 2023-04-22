@@ -8,6 +8,8 @@ module Codec.MIME.Disposition (
 ) where
 
 import Codec.MIME.TextEncoding (rfc5987)
+import Data.Text (Text)
+import Data.Text qualified as Text
 import Data.Time.Compat (LocalTime)
 import Data.Time.Format.ISO8601.Compat (iso8601Show)
 
@@ -59,8 +61,8 @@ dispparam = \case
   Name t -> "name=\"" <> t <> "\""
   FilenameStar t -> "filename*=utf-8''" <> rfc5987 t
   Filename t -> "filename=\"" <> t <> "\""
-  Created t -> "creation-date=\"" <> toText (iso8601Show t) <> "\""
-  Modified t -> "modification-date=\"" <> toText (iso8601Show t) <> "\""
-  Read t -> "read-date=\"" <> toText (iso8601Show t) <> "\""
-  Size t -> "size=" <> show t
+  Created t -> "creation-date=\"" <> Text.pack (iso8601Show t) <> "\""
+  Modified t -> "modification-date=\"" <> Text.pack (iso8601Show t) <> "\""
+  Read t -> "read-date=\"" <> Text.pack (iso8601Show t) <> "\""
+  Size t -> "size=" <> Text.pack (show t)
   Other t t' -> t <> "=" <> t'

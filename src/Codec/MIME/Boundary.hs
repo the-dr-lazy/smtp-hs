@@ -2,7 +2,10 @@ module Codec.MIME.Boundary (
   Boundary (..),
 ) where
 
-import Relude.Extra (prev)
+import Control.Applicative (liftA2)
+import Data.Foldable (fold)
+import Data.Text (Text)
+import Data.Text qualified as Text
 import System.Random.Stateful (
   Random,
   StatefulGen,
@@ -14,7 +17,7 @@ import System.Random.Stateful (
 applyNM :: (Monad m) => Int -> a -> (a -> m b) -> m [b] -> m [b]
 applyNM n a f = case n of
   0 -> id
-  _ -> applyNM (prev n) a f . liftA2 (:) (f a)
+  _ -> applyNM (pred n) a f . liftA2 (:) (f a)
 
 -- |
 -- A wrapper around 'Text' such that the 'Uniform' instance generates
@@ -24,11 +27,11 @@ newtype Boundary = Boundary Text
 instance Uniform Boundary where
   uniformM :: StatefulGen g m => g -> m Boundary
   uniformM g =
-    Boundary . toText . mapMaybe (ls !!?)
+    Boundary . Text.pack . map (ls !!)
       <$> applyNM 10 g (uniformRM (0, l)) (pure [])
    where
     ls = fold [['A' .. 'Z'], ['a' .. 'z'], ['0' .. '9']]
-    l = prev $ length ls
+    l = pred $ length ls
 
 instance UniformRange Boundary where
   uniformRM :: StatefulGen g m => (Boundary, Boundary) -> g -> m Boundary
