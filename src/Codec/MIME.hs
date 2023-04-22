@@ -36,7 +36,7 @@ import Control.Monad.Random (MonadRandom (getRandom))
 import Data.ByteString.Base64.Lazy qualified as B64L
 import Data.ByteString.Builder (Builder, byteString, lazyByteString)
 import Data.ByteString.Lazy qualified as BSL
-import Data.Char (isAscii)
+import Data.Char (isAscii, chr)
 import Data.Foldable (fold)
 import Data.Functor.Const (Const (Const))
 import Data.Kind (Type)
@@ -144,8 +144,8 @@ singleBuilder Part{partContent = Single bs, ..} = PartBuilder{..}
       foldMap ((<> "\r\n") . lazyByteString . B64L.encode) $
         flip unfoldr bs \b ->
           if BSL.null b then Nothing else pure (BSL.splitAt 57 b)
-    Just QuotedPrintable -> qpBuilder $ toQP True bs
-    Just Binary -> qpBuilder $ toQP False bs
+    Just QuotedPrintable -> toQP True (chr . fromIntegral <$> BSL.unpack bs)
+    Just Binary -> toQP False (chr . fromIntegral <$> BSL.unpack bs)
     _ -> lazyByteString bs
 
 -- |
