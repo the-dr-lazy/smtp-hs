@@ -73,7 +73,6 @@ library
     , template-haskell
     , time
     , time-compat
-    , yesod-content-pdf
 
 test-suite codec-tests
   import:         shared

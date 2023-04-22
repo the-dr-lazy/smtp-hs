@@ -50,7 +50,6 @@ import Data.Traversable (for)
 import System.FilePath (takeBaseName, takeExtension)
 import Text.Blaze.Html (Html)
 import Text.Blaze.Html.Renderer.Utf8 (renderHtml)
-import Yesod.Content.PDF (PDF (pdfBytes))
 
 -- | The multiplicity of a 'Part'.
 data Mult
@@ -354,13 +353,3 @@ instance ToSinglePart Html where
   encodingFor = Const (Just QuotedPrintable)
   makePartContent :: Html -> BSL.ByteString
   makePartContent = renderHtml
-
-instance ToSinglePart PDF where
-  contentTypeFor :: Const ContentType PDF
-  contentTypeFor = Const (ContentType ApplicationPdf [("charset", "utf-8")])
-  dispositionFor :: Const (Maybe Disposition) PDF
-  dispositionFor = Const (Just (Disposition Attachment []))
-  encodingFor :: Const (Maybe ContentTransferEncoding) PDF
-  encodingFor = Const (Just Base64)
-  makePartContent :: PDF -> BSL.ByteString
-  makePartContent = BSL.fromStrict . pdfBytes
