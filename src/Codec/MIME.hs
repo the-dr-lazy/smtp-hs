@@ -36,7 +36,7 @@ import Control.Monad.Random (MonadRandom (getRandom))
 import Data.ByteString.Base64.Lazy qualified as B64L
 import Data.ByteString.Builder (Builder, byteString, lazyByteString)
 import Data.ByteString.Lazy qualified as BSL
-import Data.Char (isAscii, chr)
+import Data.Char (chr, isAscii)
 import Data.Foldable (fold)
 import Data.Functor.Const (Const (Const))
 import Data.Kind (Type)

@@ -50,6 +50,10 @@ qpPartToBuilder :: Bool -> Int -> QPPart -> (Int, Builder)
 qpPartToBuilder isTextual column = \case
   Printable text
     | column < (74 - Text.length text) -> (column + Text.length text, Text.encodeUtf8Builder text)
+    | Text.length text > 74 ->
+        let (pref, suff) = Text.splitAt (74 - column) text
+         in ((Text.encodeUtf8Builder pref <> "=\r\n") <>)
+              <$> qpPartToBuilder isTextual 0 (Printable suff)
     | otherwise -> (Text.length text, "=\r\n" <> Text.encodeUtf8Builder text)
   Escaped bits
     | column < (75 - 3 * length codes) -> (column + 3 * length codes, encoded)
