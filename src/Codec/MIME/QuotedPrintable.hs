@@ -25,13 +25,17 @@ data QPPart
 
 qpPart :: Char -> QPPart
 qpPart char@(utf8 -> bits)
-  | char == '=' = Escaped (Text.pack $ toUpper <$> foldMap (`showHex` "") bits)
+  | char == '=' = Escaped escaped
   | char == '\t' = Tab
   | char == '\r' = CarriageReturn
   | char == '\n' = LineFeed
   | char == ' ' = Space
   | pure 33 <= bits && bits <= pure 126 = Printable (Text.singleton char)
-  | otherwise = Escaped (Text.pack $ toUpper <$> foldMap (`showHex` "") bits)
+  | otherwise = Escaped escaped
+ where
+  -- Lowercase hexadecimals are explicitly illegal
+  -- https://www.rfc-editor.org/rfc/rfc2045#section-6.7
+  escaped = Text.pack $ toUpper <$> foldMap (`showHex` "") bits
 
 squashParts :: Bool -> [QPPart] -> [QPPart]
 squashParts isTextual = \case
