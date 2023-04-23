@@ -21,7 +21,8 @@ applyNM n a f = case n of
 
 -- |
 -- A wrapper around 'Text' such that the 'Uniform' instance generates
--- a sequence of ten ASCII alphanumeric characters.
+-- a sequence of ten ASCII alphanumeric characters preceded by "=_",
+-- so that the boundary never appears in quoted-printable encodings.
 newtype Boundary = Boundary Text
 
 instance Uniform Boundary where
