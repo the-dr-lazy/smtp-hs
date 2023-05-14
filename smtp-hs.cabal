@@ -19,6 +19,7 @@ common shared
   default-extensions:
     BlockArguments
     DataKinds
+    DefaultSignatures
     DerivingStrategies
     LambdaCase
     MultiWayIf
@@ -29,7 +30,7 @@ common shared
     TypeFamilies
     ViewPatterns
 
-  ghc-options:        -O2 -Wall
+  ghc-options:        -O2 -Wall -Wno-unticked-promoted-constructors
   build-depends:
     , base        >=4.14 && <5
     , containers
