@@ -20,8 +20,8 @@ module Network.SMTP.Email.Parse (
 ) where
 
 import Control.Applicative (Alternative (empty), liftA2)
-import Control.Arrow ((+++))
 import Control.Monad (join, void, when)
+import Data.Bifunctor (Bifunctor (first))
 import Data.ByteString (ByteString)
 import Data.Char (chr)
 import Data.Foldable (fold)
@@ -132,13 +132,13 @@ validMailbox :: Text -> Bool
 validMailbox = not . null . validateMailbox
 
 validateEmail :: Text -> Either String Email
-validateEmail = (show +++ id) . parse (addrSpec <* eof) ""
+validateEmail = first show . parse (addrSpec <* eof) ""
 
 validateMailbox :: Text -> Either String Mailbox
-validateMailbox = (show +++ id) . parse (mailbox' <* eof) ""
+validateMailbox = first show . parse (mailbox' <* eof) ""
 
 validateMailboxes :: Text -> Either String (NonEmpty Mailbox)
-validateMailboxes = (show +++ id) . parse (mailboxList <* eof) ""
+validateMailboxes = first show . parse (mailboxList <* eof) ""
 
 -- Parsing
 
@@ -188,18 +188,27 @@ wsp1 = void $ many1 wsp
 -- 3.2.1
 
 quotedpair :: Parser Text
-quotedpair = (Text.cons <$> char '\\' <*> fmap Text.singleton (vchar <|> wsp)) <|> obsQP
+quotedpair =
+  (Text.cons <$> char '\\' <*> fmap Text.singleton (vchar <|> wsp))
+    <|> obsQP
 
 -- 3.2.2
 
 fws :: Parser ()
-fws = Parse.optionMaybe (Parse.many wsp *> crlf) *> void (many1 wsp) <|> obsFws
+fws =
+  (Parse.optionMaybe (Parse.many wsp *> crlf) *> void (many1 wsp))
+    <|> obsFws
 
 ctext :: Parser Char
-ctext = ranges [[33 .. 39], [42 .. 91], [93 .. 126]] <|> obsCtext
+ctext =
+  ranges [[33 .. 39], [42 .. 91], [93 .. 126]]
+    <|> obsCtext
 
 ccontent :: Parser Text
-ccontent = fmap Text.singleton ctext <|> quotedpair <|> comment
+ccontent =
+  fmap Text.singleton ctext
+    <|> quotedpair
+    <|> comment
 
 comment :: Parser Text
 comment =
@@ -210,7 +219,9 @@ comment =
       <* char ')'
 
 cfws :: Parser ()
-cfws = void (many1 (Parse.optionMaybe fws *> comment) <* fws) <|> fws
+cfws =
+  void (many1 (Parse.optionMaybe fws *> comment) <* fws)
+    <|> fws
 
 -- 3.2.3
 
@@ -224,7 +235,11 @@ dotAtomText :: Parser Text
 dotAtomText = Text.intercalate "." <$> tmany1 atext `endBy1` string "."
 
 dotAtom :: Parser Text
-dotAtom = fmap fold $ Parse.optionMaybe cfws *> many1 dotAtomText <* Parse.optionMaybe cfws
+dotAtom =
+  fmap fold $
+    Parse.optionMaybe cfws
+      *> many1 dotAtomText
+      <* Parse.optionMaybe cfws
 
 -- 3.2.4
 
@@ -255,7 +270,8 @@ phrase :: Parser [Text]
 phrase = many1 word <|> obsPhrase
 
 unstructured :: Parser Text
-unstructured = (tmany (Parse.optionMaybe fws *> vchar) <* Parse.many wsp) <|> obsUnstruct
+unstructured =
+  (tmany (Parse.optionMaybe fws *> vchar) <* Parse.many wsp) <|> obsUnstruct
 
 -- 3.4
 
@@ -266,7 +282,8 @@ mailbox' :: Parser Mailbox
 mailbox' = nameAddr <|> (Mailbox Nothing <$> addrSpec)
 
 nameAddr :: Parser Mailbox
-nameAddr = Mailbox <$> (fmap Text.unwords <$> Parse.optionMaybe phrase) <*> angleAddr
+nameAddr =
+  Mailbox <$> (fmap Text.unwords <$> Parse.optionMaybe phrase) <*> angleAddr
 
 angleAddr :: Parser Email
 angleAddr =
@@ -290,11 +307,16 @@ displayName :: Parser [Text]
 displayName = phrase
 
 mailboxList :: Parser (NonEmpty Mailbox)
-mailboxList = liftA2 (:|) mailbox' (Parse.many (char ',' *> mailbox')) <|> obsMboxList
+mailboxList =
+  liftA2 (:|) mailbox' (Parse.many (char ',' *> mailbox'))
+    <|> obsMboxList
 
 addressList :: Parser [Mailbox]
 addressList =
-  (fold <$> liftA2 (:) addresses (Parse.many (char ',' *> addresses))) <|> obsAddrList
+  ( fold
+      <$> liftA2 (:) addresses (Parse.many (char ',' *> addresses))
+  )
+    <|> obsAddrList
 
 groupList :: Parser [Mailbox]
 groupList = fmap toList mailboxList <|> fmap (const []) (cfws <|> obsGroupList)
@@ -337,7 +359,8 @@ domainlabel = do
       *> liftA2 (:|) alphaNum (Parse.many (alphaNum <|> char '-'))
       <* Parse.optionMaybe cfws
 
-  length content <= 63 && NonEmpty.last content /= '-' ?> Text.pack (toList content)
+  (length content <= 63 && NonEmpty.last content /= '-')
+    ?> Text.pack (toList content)
 
 domainliteral :: Parser Text
 domainliteral =
@@ -353,7 +376,9 @@ dtext :: Parser Text
 dtext = fmap Text.singleton (ranges [[33 .. 90], [94 .. 126]]) <|> obsDtext
 
 obsPhrase :: Parser [Text]
-obsPhrase = (:) <$> word <*> Parse.many (word <|> (Text.singleton <$> char '.') <|> ("" <$ cfws))
+obsPhrase =
+  liftA2 (:) word $
+    Parse.many (word <|> (Text.singleton <$> char '.') <|> ("" <$ cfws))
 
 -- OBSOLETE
 
@@ -368,12 +393,17 @@ obsQtext = obsNoWsCtl
 obsUtext = char '\0' <|> obsNoWsCtl <|> vchar
 
 obsQP :: Parser Text
-obsQP = Text.cons <$> char '\\' <*> fmap Text.singleton (choice [nul, obsNoWsCtl, lf, cr])
+obsQP =
+  liftA2 Text.cons (char '\\') $
+    Text.singleton <$> choice [nul, obsNoWsCtl, lf, cr]
 
 obsUnstruct :: Parser Text
 obsUnstruct =
   fmap fold <$> Parse.many $
-    (Parse.many lf *> Parse.many cr *> tmany (obsUtext <* Parse.many lf <* Parse.many cr))
+    ( Parse.many lf
+        *> Parse.many cr
+        *> tmany (obsUtext <* Parse.many lf <* Parse.many cr)
+    )
       <|> ("" <$ fws)
 
 -- 4.2
@@ -399,31 +429,43 @@ obsDomainList = do
   void $ Parse.many (cfws <|> void (char ','))
   void $ char '@'
   dom <- domain
-  doms <- Parse.many (char ',' *> Parse.optionMaybe cfws *> Parse.optionMaybe (char '@' *> domain))
+  doms <-
+    Parse.many
+      ( char ','
+          *> Parse.optionMaybe cfws
+          *> Parse.optionMaybe (char '@' *> domain)
+      )
   pure $ dom : catMaybes doms
 
 obsMboxList :: Parser (NonEmpty Mailbox)
 obsMboxList = do
   void . Parse.many $ Parse.optionMaybe cfws *> char ','
   mb <- mailbox'
-  mbs <- Parse.many $ char ',' *> Parse.optionMaybe (fmap Just mailbox' <|> (Nothing <$ cfws))
+  mbs <-
+    Parse.many $
+      char ',' *> Parse.optionMaybe (fmap Just mailbox' <|> (Nothing <$ cfws))
   pure $ mb :| mapMaybe join mbs
 
 obsAddrList :: Parser [Mailbox]
 obsAddrList = do
   void . Parse.many $ Parse.optionMaybe cfws *> char ','
   mb <- addresses
-  mbs <- Parse.many $ char ',' *> Parse.optionMaybe (fmap Just addresses <|> (Nothing <$ cfws))
+  mbs <-
+    Parse.many $
+      char ',' *> Parse.optionMaybe (fmap Just addresses <|> (Nothing <$ cfws))
   pure $ mb <> concatMap (fromMaybe [] . join) mbs
 
 obsGroupList :: Parser ()
-obsGroupList = void $ many1 (Parse.optionMaybe cfws *> char ',') *> Parse.optionMaybe cfws
+obsGroupList =
+  void $ many1 (Parse.optionMaybe cfws *> char ',') *> Parse.optionMaybe cfws
 
 obsLocalPart :: Parser Text
-obsLocalPart = fmap fold $ (:) <$> word <*> Parse.many (Text.cons <$> char '.' <*> word)
+obsLocalPart =
+  fmap fold . liftA2 (:) word $ Parse.many (liftA2 Text.cons (char '.') word)
 
 obsDomain :: Parser Text
-obsDomain = fmap fold $ (:) <$> atom <*> Parse.many (Text.cons <$> char '.' <*> atom)
+obsDomain =
+  fmap fold . liftA2 (:) atom $ Parse.many (liftA2 Text.cons (char '.') atom)
 
 obsDtext :: Parser Text
 obsDtext = fmap Text.singleton obsNoWsCtl <|> quotedpair
