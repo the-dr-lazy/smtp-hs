@@ -56,7 +56,6 @@ library
     Network.SMTP.Command
     Network.SMTP.Email
     Network.SMTP.Email.Parse
-    Network.SMTP.Response
 
   build-depends:
     , base16-bytestring

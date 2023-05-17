@@ -17,13 +17,12 @@ import Network.BSD (getHostName)
 import Network.Connection
 import Network.SMTP.Auth as Network.SMTP (AuthType (..), auth, encodeLogin)
 import Network.SMTP.Command as Network.SMTP (Command (..))
-import Network.SMTP.Response as Network.SMTP (ReplyCode)
 import Network.Socket (HostName, PortNumber)
 
 defaulttls :: TLSSettings
 defaulttls = TLSSettingsSimple False False False
 
-response :: (MonadReader Connection m, MonadIO m) => m (ReplyCode, ByteString)
+response :: (MonadReader Connection m, MonadIO m) => m (Int, ByteString)
 response = do
   l <- liftIO . connectionGetLine 1000 =<< ask
   let (digits, body) = B8.span isDigit l
@@ -32,7 +31,7 @@ response = do
     Just (_, bs) -> pure (read (B8.unpack digits), bs)
     Nothing -> pure (read (B8.unpack digits), mempty)
 
-replyCode :: (MonadReader Connection m, MonadIO m) => m ReplyCode
+replyCode :: (MonadReader Connection m, MonadIO m) => m Int
 replyCode = fst <$> response
 
 cputLine :: (MonadReader Connection m, MonadIO m) => ByteString -> m ()
@@ -41,7 +40,7 @@ cputLine bs = liftIO . (`connectionPut` (bs <> "\r\n")) =<< ask
 sendCommand ::
   (MonadReader Connection m, MonadIO m) =>
   Command ->
-  m (ReplyCode, ByteString)
+  m (Int, ByteString)
 sendCommand = \case
   DATA bs -> do
     cputLine "DATA"
@@ -94,7 +93,7 @@ command ::
   (MonadReader Connection m, MonadIO m) =>
   Int ->
   Command ->
-  ReplyCode ->
+  Int ->
   m (Maybe ByteString)
 command times cmd expect = do
   (code, msg) <- sendCommand cmd
@@ -107,7 +106,7 @@ commandOrQuit ::
   (MonadReader Connection m, MonadIO m) =>
   Int ->
   Command ->
-  ReplyCode ->
+  Int ->
   m ByteString
 commandOrQuit times cmd expect = do
   (code, msg) <- sendCommand cmd
